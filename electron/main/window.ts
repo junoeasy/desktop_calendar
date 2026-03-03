@@ -29,6 +29,7 @@ export function createMainWindow() {
     height,
     x: saved.x,
     y: saved.y,
+    icon: path.join(app.getAppPath(), "assets", "app.ico"),
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",

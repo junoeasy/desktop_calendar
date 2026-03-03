@@ -66,11 +66,13 @@
     "files": [
       "dist-renderer/**/*",
       "dist-electron/**/*",
+      "assets/**/*",
       "db/migrations/**/*",
       "package.json"
     ],
     "asar": true,
     "win": {
+      "icon": "assets/app.ico",
       "signAndEditExecutable": false,
       "target": [
         {
@@ -80,6 +82,10 @@
           ]
         }
       ]
+    },
+    "nsis": {
+      "installerIcon": "assets/app.ico",
+      "uninstallerIcon": "assets/app.ico"
     }
   }
 }
