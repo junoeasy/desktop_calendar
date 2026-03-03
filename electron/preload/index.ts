@@ -1,0 +1,35 @@
+import { contextBridge, ipcRenderer } from "electron";
+import { IPC_CHANNELS } from "../../shared/ipc";
+
+const api = {
+  auth: {
+    signIn: () => ipcRenderer.invoke(IPC_CHANNELS.authSignIn),
+    signOut: () => ipcRenderer.invoke(IPC_CHANNELS.authSignOut),
+    status: () => ipcRenderer.invoke(IPC_CHANNELS.authStatus)
+  },
+  settings: {
+    get: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGet),
+    update: (patch: unknown) => ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, patch)
+  },
+  calendars: {
+    list: () => ipcRenderer.invoke(IPC_CHANNELS.calendarList),
+    setSelected: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.calendarSelect, payload),
+    setColor: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.calendarColor, payload)
+  },
+  events: {
+    month: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.monthEvents, payload),
+    day: (dateIso: string) => ipcRenderer.invoke(IPC_CHANNELS.dayEvents, dateIso),
+    create: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.eventCreate, payload),
+    update: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.eventUpdate, payload),
+    delete: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.eventDelete, payload)
+  },
+  sync: {
+    now: (payload?: unknown) => ipcRenderer.invoke(IPC_CHANNELS.syncNow, payload ?? {}),
+    status: () => ipcRenderer.invoke(IPC_CHANNELS.syncStatus)
+  },
+  window: {
+    setDesktopPinned: (pinned: boolean) => ipcRenderer.invoke(IPC_CHANNELS.desktopPinned, pinned)
+  }
+};
+
+contextBridge.exposeInMainWorld("desktopCalApi", api);

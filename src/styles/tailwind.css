@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #2563eb;
+}
+
+body {
+  @apply m-0 bg-slate-100 text-slate-900;
+  font-family:
+    "Pretendard",
+    "Segoe UI",
+    sans-serif;
+}
