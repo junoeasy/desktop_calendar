@@ -1,0 +1,16 @@
+{
+  "name": "desktop_calendar",
+  "version": "0.1.0",
+  "description": "Desktop calendar with Google Calendar integration",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "googleapis": "^152.0.0"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0"
+  }
+}

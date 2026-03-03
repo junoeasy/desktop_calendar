@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Desktop Calendar</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-bar">
+        <div>
+          <h1>Desktop Calendar</h1>
+          <p>바탕화면 고정형 캘린더</p>
+        </div>
+        <div class="actions">
+          <button id="pinBtn">고정 ON</button>
+          <button id="connectBtn">Google 연결</button>
+          <button id="logoutBtn" class="ghost">로그아웃</button>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="calendar-panel">
+          <div class="calendar-head">
+            <button id="prevMonth">&lt;</button>
+            <h2 id="monthTitle"></h2>
+            <button id="nextMonth">&gt;</button>
+          </div>
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </section>
+
+        <section class="events-panel">
+          <h2 id="selectedDateTitle">선택 날짜 일정</h2>
+          <p id="statusText" class="status">연결 상태를 확인 중입니다...</p>
+          <form id="eventForm" class="event-form">
+            <input id="summaryInput" type="text" placeholder="일정 제목" required />
+            <input id="locationInput" type="text" placeholder="장소 (선택)" />
+            <div class="time-row">
+              <label><input id="allDayInput" type="checkbox" /> 하루 종일</label>
+              <input id="startTimeInput" type="time" value="09:00" />
+              <input id="endTimeInput" type="time" value="10:00" />
+            </div>
+            <textarea id="descriptionInput" rows="2" placeholder="메모 (선택)"></textarea>
+            <button type="submit">선택 날짜에 일정 추가</button>
+          </form>
+          <ul id="eventsList" class="events-list"></ul>
+        </section>
+      </main>
+    </div>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>
