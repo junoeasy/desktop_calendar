@@ -58,6 +58,7 @@ export type AppSettings = {
   syncIntervalMinutes: number;
   themeMode: ThemeMode;
   accentColor: string;
+  windowOpacity: number;
 };
 
 export type CalendarDayEventPreview = {

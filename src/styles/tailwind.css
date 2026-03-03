@@ -6,10 +6,25 @@
   --accent: #2563eb;
 }
 
+html,
 body {
-  @apply m-0 bg-slate-100 text-slate-900;
+  @apply m-0 text-slate-900;
+  background: transparent;
   font-family:
     "Pretendard",
     "Segoe UI",
     sans-serif;
+}
+
+#root {
+  height: 100%;
+  background: transparent;
+}
+
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
 }

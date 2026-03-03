@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC_CHANNELS } from "../../shared/ipc";
+import { IPC_CHANNELS, NOTIFICATION_EVENTS } from "../../shared/ipc";
+import type { NotificationSummaryPayload } from "../../shared/apiTypes";
 
 const api = {
   auth: {
@@ -27,8 +28,20 @@ const api = {
     now: (payload?: unknown) => ipcRenderer.invoke(IPC_CHANNELS.syncNow, payload ?? {}),
     status: () => ipcRenderer.invoke(IPC_CHANNELS.syncStatus)
   },
+  summary: {
+    get: () => ipcRenderer.invoke(IPC_CHANNELS.summaryGet)
+  },
   window: {
     setDesktopPinned: (pinned: boolean) => ipcRenderer.invoke(IPC_CHANNELS.desktopPinned, pinned)
+  },
+  notifications: {
+    onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, payload: NotificationSummaryPayload) => callback(payload);
+      ipcRenderer.on(NOTIFICATION_EVENTS.openSummary, handler);
+      return () => {
+        ipcRenderer.off(NOTIFICATION_EVENTS.openSummary, handler);
+      };
+    }
   }
 };
 

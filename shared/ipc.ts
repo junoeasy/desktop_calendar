@@ -30,7 +30,8 @@ export const settingsUpdateSchema = z.object({
   desktopPinned: z.boolean().optional(),
   syncIntervalMinutes: z.number().int().min(1).max(120).optional(),
   themeMode: z.enum(["light", "dark"]).optional(),
-  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional()
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  windowOpacity: z.number().min(0.3).max(1).optional()
 });
 
 export const calendarSelectionSchema = z.object({
@@ -67,6 +68,11 @@ export const IPC_CHANNELS = {
   eventDelete: "event:delete",
   syncNow: "sync:now",
   syncStatus: "sync:status",
+  summaryGet: "summary:get",
   desktopPinned: "window:desktop-pinned",
   setTrayMinimize: "window:tray-minimize"
+} as const;
+
+export const NOTIFICATION_EVENTS = {
+  openSummary: "notification:open-summary"
 } as const;

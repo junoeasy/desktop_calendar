@@ -14,7 +14,8 @@ export const defaultSettings: AppSettings = {
   desktopPinned: true,
   syncIntervalMinutes: 1,
   themeMode: "light",
-  accentColor: "#2563eb"
+  accentColor: "#2563eb",
+  windowOpacity: 1
 };
 
 export const userRepository = {
@@ -170,18 +171,16 @@ function mapEvent(row: DbEvent): EventEntity {
 
 export const eventRepository = {
   listByDay(dateIso: string) {
-    const start = dayjs(dateIso).startOf("day").toISOString();
-    const end = dayjs(dateIso).endOf("day").toISOString();
+    const day = dayjs(dateIso).format("YYYY-MM-DD");
     return (getDb()
       .prepare(
         `SELECT * FROM events
          WHERE deleted_at IS NULL
-           AND starts_at <= ?
-           AND ends_at >= ?
+           AND date(datetime(starts_at), 'localtime') = date(?)
            AND calendar_id IN (SELECT id FROM calendars WHERE selected = 1)
          ORDER BY starts_at ASC`
       )
-      .all(end, start) as DbEvent[]).map(mapEvent);
+      .all(day) as DbEvent[]).map(mapEvent);
   },
   listByMonth(year: number, month: number) {
     const start = dayjs(`${year}-${String(month).padStart(2, "0")}-01`).startOf("month").toISOString();
@@ -190,12 +189,26 @@ export const eventRepository = {
       .prepare(
         `SELECT * FROM events
          WHERE deleted_at IS NULL
-           AND starts_at <= ?
-           AND ends_at >= ?
+           AND julianday(starts_at) <= julianday(?)
+           AND julianday(ends_at) >= julianday(?)
            AND calendar_id IN (SELECT id FROM calendars WHERE selected = 1)
          ORDER BY starts_at ASC`
       )
       .all(end, start) as DbEvent[]).map(mapEvent);
+  },
+  listUpcoming(days = 7) {
+    const start = nowIso();
+    const end = dayjs().add(days, "day").toISOString();
+    return (getDb()
+      .prepare(
+        `SELECT * FROM events
+         WHERE deleted_at IS NULL
+           AND julianday(starts_at) >= julianday(?)
+           AND julianday(starts_at) <= julianday(?)
+           AND calendar_id IN (SELECT id FROM calendars WHERE selected = 1)
+         ORDER BY starts_at ASC`
+      )
+      .all(start, end) as DbEvent[]).map(mapEvent);
   },
   upsertLocal(input: Omit<EventEntity, "id" | "createdAt" | "updatedAt" | "localUpdatedAt" | "providerEventId" | "etag" | "remoteUpdatedAt" | "deletedAt"> & { id?: string }) {
     const id = input.id ?? uuidv4();
@@ -337,19 +350,30 @@ export const syncRepository = {
 };
 
 export const settingsRepository = {
+  normalize(settings: Partial<AppSettings>): AppSettings {
+    const merged = { ...defaultSettings, ...settings };
+    const opacity =
+      typeof merged.windowOpacity === "number" && Number.isFinite(merged.windowOpacity)
+        ? merged.windowOpacity
+        : defaultSettings.windowOpacity;
+    return {
+      ...merged,
+      windowOpacity: Math.min(1, Math.max(0.3, opacity))
+    };
+  },
   get(): AppSettings {
     const row = getDb().prepare("SELECT value_json FROM app_settings WHERE key='main'").get() as { value_json: string } | undefined;
     if (!row) {
       return defaultSettings;
     }
     try {
-      return { ...defaultSettings, ...(JSON.parse(row.value_json) as Partial<AppSettings>) };
+      return this.normalize(JSON.parse(row.value_json) as Partial<AppSettings>);
     } catch {
       return defaultSettings;
     }
   },
   update(patch: Partial<AppSettings>) {
-    const next = { ...this.get(), ...patch };
+    const next = this.normalize({ ...this.get(), ...patch });
     getDb()
       .prepare(
         `INSERT INTO app_settings (key, value_json, updated_at) VALUES ('main', ?, ?)

@@ -28,6 +28,19 @@ export type SyncStatus = {
   lastError: string | null;
 };
 
+export type SummaryEvent = {
+  id: string;
+  title: string;
+  startsAt: string;
+  allDay: number;
+};
+
+export type NotificationSummaryPayload = {
+  generatedAt: string;
+  today: SummaryEvent[];
+  week: SummaryEvent[];
+};
+
 export type DesktopCalBridge = {
   auth: {
     signIn: () => Promise<{ connected: true; user: User; calendars: CalendarRow[] } | { connected: false; error: string }>;
@@ -54,7 +67,13 @@ export type DesktopCalBridge = {
     now: (payload?: { forceFull?: boolean }) => Promise<SyncStatus>;
     status: () => Promise<SyncStatus>;
   };
+  summary: {
+    get: () => Promise<NotificationSummaryPayload>;
+  };
   window: {
     setDesktopPinned: (pinned: boolean) => Promise<{ pinned: boolean }>;
+  };
+  notifications: {
+    onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => () => void;
   };
 };

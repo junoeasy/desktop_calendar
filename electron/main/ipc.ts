@@ -31,6 +31,27 @@ function dayList(year: number, month: number) {
   }));
 }
 
+function summaryPayload() {
+  const todayDate = dayjs().format("YYYY-MM-DD");
+  const today = eventRepository.listByDay(todayDate).map((event) => ({
+    id: event.id,
+    title: event.title,
+    startsAt: event.startsAt,
+    allDay: event.allDay
+  }));
+  const week = eventRepository.listUpcoming(7).map((event) => ({
+    id: event.id,
+    title: event.title,
+    startsAt: event.startsAt,
+    allDay: event.allDay
+  }));
+  return {
+    generatedAt: new Date().toISOString(),
+    today,
+    week
+  };
+}
+
 export function registerIpc(mainWindow: BrowserWindow) {
   ipcMain.handle(IPC_CHANNELS.authSignIn, async () => {
     try {
@@ -67,6 +88,8 @@ export function registerIpc(mainWindow: BrowserWindow) {
     const settings = settingsRepository.update(patch);
     mainWindow.setResizable(!settings.desktopPinned);
     mainWindow.setMaximizable(!settings.desktopPinned);
+    mainWindow.setMovable(!settings.desktopPinned);
+    mainWindow.setSkipTaskbar(settings.desktopPinned);
     return settings;
   });
 
@@ -168,10 +191,13 @@ export function registerIpc(mainWindow: BrowserWindow) {
   });
 
   ipcMain.handle(IPC_CHANNELS.syncStatus, async () => getSyncStatus());
+  ipcMain.handle(IPC_CHANNELS.summaryGet, async () => summaryPayload());
 
   ipcMain.handle(IPC_CHANNELS.desktopPinned, async (_e, pinned: boolean) => {
     mainWindow.setResizable(!pinned);
     mainWindow.setMaximizable(!pinned);
+    mainWindow.setMovable(!pinned);
+    mainWindow.setSkipTaskbar(pinned);
     return { pinned };
   });
 }

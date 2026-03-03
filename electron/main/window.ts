@@ -29,7 +29,9 @@ export function createMainWindow() {
     height,
     x: saved.x,
     y: saved.y,
-    backgroundColor: "#0f172a",
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
     title: "DesktopCal Sync",
     autoHideMenuBar: true,
     webPreferences: {
