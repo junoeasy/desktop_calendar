@@ -70,6 +70,12 @@
       "db/migrations/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env"
+      }
+    ],
     "asar": true,
     "win": {
       "icon": "assets/app.ico",

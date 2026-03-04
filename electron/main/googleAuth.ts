@@ -8,11 +8,31 @@ import Store from "electron-store";
 import { google } from "googleapis";
 import dotenv from "dotenv";
 
-dotenv.config();
-dotenv.config({ path: path.join(process.cwd(), ".env") });
-if (app) {
-  dotenv.config({ path: path.join(app.getPath("userData"), ".env") });
+function loadEnv() {
+  const envPaths = new Set<string>();
+  envPaths.add(path.join(process.cwd(), ".env"));
+  envPaths.add(path.join(path.dirname(process.execPath), ".env"));
+  envPaths.add(path.join(process.env.APPDATA ?? "", "desktopcal-sync", ".env"));
+  envPaths.add(path.join(process.env.APPDATA ?? "", "DesktopCal Sync", ".env"));
+
+  try {
+    envPaths.add(path.join(process.resourcesPath, ".env"));
+  } catch {
+    // Ignore unavailable process.resourcesPath.
+  }
+
+  try {
+    envPaths.add(path.join(app.getPath("userData"), ".env"));
+  } catch {
+    // Ignore unavailable userData path.
+  }
+
+  for (const envPath of envPaths) {
+    dotenv.config({ path: envPath, override: false });
+  }
 }
+
+loadEnv();
 
 type TokenStore = {
   get: (key: "googleTokens") => Record<string, unknown> | undefined;
@@ -31,7 +51,13 @@ const SCOPES = [
 function env(name: "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "GOOGLE_REDIRECT_PORT") {
   const value = process.env[name];
   if (!value && name !== "GOOGLE_REDIRECT_PORT") {
-    throw new Error(`${name} is required`);
+    let userEnvPath = "AppData/Roaming/DesktopCal Sync/.env";
+    try {
+      userEnvPath = path.join(app.getPath("userData"), ".env");
+    } catch {
+      // Keep fallback display path.
+    }
+    throw new Error(`${name} is required (.env path: ${userEnvPath})`);
   }
   return value ?? "42813";
 }
