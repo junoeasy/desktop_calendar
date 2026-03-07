@@ -242,6 +242,10 @@ export const eventRepository = {
     const row = getDb().prepare("SELECT * FROM events WHERE id = ?").get(id) as DbEvent | undefined;
     return row ? mapEvent(row) : null;
   },
+  getByProviderEventId(providerEventId: string) {
+    const row = getDb().prepare("SELECT * FROM events WHERE provider_event_id = ?").get(providerEventId) as DbEvent | undefined;
+    return row ? mapEvent(row) : null;
+  },
   upsertRemote(row: {
     calendarId: string;
     providerEventId: string;

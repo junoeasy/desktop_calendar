@@ -100,9 +100,7 @@ async function pullFromGoogle() {
       for (const item of items) {
         if (!item.id) continue;
         if (item.status === "cancelled") {
-          const local = eventRepository
-            .listPendingSync()
-            .find((e) => e.providerEventId === item.id);
+          const local = eventRepository.getByProviderEventId(item.id);
           if (local) {
             eventRepository.hardDelete(local.id);
           }
