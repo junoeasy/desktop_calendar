@@ -333,19 +333,29 @@ export const syncRepository = {
       .prepare("UPDATE sync_queue SET attempts = ?, next_retry_at = ?, last_error = ?, updated_at = ? WHERE id = ?")
       .run(attempts, nextRetryAt, error, nowIso(), id);
   },
-  setSyncToken(token: string | null) {
+  syncTokenKey(calendarProviderId: string) {
+    return `google:${calendarProviderId}`;
+  },
+  setSyncToken(calendarProviderId: string, token: string | null) {
     const ts = nowIso();
     getDb()
       .prepare(
         `INSERT INTO sync_state (id, user_id, provider, sync_token, last_full_sync_at, updated_at)
-         VALUES ('google-main', '', 'google', ?, ?, ?)
+         VALUES (?, '', 'google', ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET sync_token=excluded.sync_token, updated_at=excluded.updated_at`
       )
-      .run(token, ts, ts);
+      .run(this.syncTokenKey(calendarProviderId), token, ts, ts);
   },
-  getSyncToken() {
-    const row = getDb().prepare("SELECT sync_token FROM sync_state WHERE id='google-main'").get() as { sync_token: string | null } | undefined;
+  getSyncToken(calendarProviderId: string) {
+    const row = getDb()
+      .prepare("SELECT sync_token FROM sync_state WHERE id = ?")
+      .get(this.syncTokenKey(calendarProviderId)) as { sync_token: string | null } | undefined;
     return row?.sync_token ?? null;
+  },
+  clearAllSyncTokens() {
+    getDb()
+      .prepare("UPDATE sync_state SET sync_token = NULL, updated_at = ? WHERE provider = 'google'")
+      .run(nowIso());
   }
 };
 

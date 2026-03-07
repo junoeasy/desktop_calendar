@@ -62,8 +62,8 @@ async function pullFromGoogle() {
     return;
   }
   const api = google.calendar({ version: "v3", auth: client });
-  let syncToken = syncRepository.getSyncToken();
   for (const cal of selectedCalendars()) {
+    let syncToken = syncRepository.getSyncToken(cal.provider_calendar_id);
     const baseParams = {
       calendarId: cal.provider_calendar_id,
       maxResults: 1000,
@@ -90,7 +90,7 @@ async function pullFromGoogle() {
         if (!shouldReset) {
           throw error;
         }
-        syncRepository.setSyncToken(null);
+        syncRepository.setSyncToken(cal.provider_calendar_id, null);
         syncToken = null;
         pageToken = undefined;
         resp = await api.events.list(baseParams);
@@ -134,7 +134,7 @@ async function pullFromGoogle() {
       nextSyncToken = resp.data.nextSyncToken ?? nextSyncToken;
     } while (pageToken);
 
-    syncRepository.setSyncToken(nextSyncToken);
+    syncRepository.setSyncToken(cal.provider_calendar_id, nextSyncToken);
   }
 }
 
@@ -213,7 +213,7 @@ export async function runSync(forceFull = false) {
   status.lastError = null;
   try {
     if (forceFull) {
-      syncRepository.setSyncToken(null);
+      syncRepository.clearAllSyncTokens();
     }
     await pushQueue();
     if (forceFull) {
