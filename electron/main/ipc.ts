@@ -72,7 +72,14 @@ export function registerIpc(mainWindow: BrowserWindow) {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.authSignOut, async () => signOutGoogle());
+  ipcMain.handle(IPC_CHANNELS.authSignOut, async () => {
+    const result = signOutGoogle();
+    syncRepository.clearAll();
+    eventRepository.clearAll();
+    calendarRepository.clearAll();
+    userRepository.clearAll();
+    return result;
+  });
 
   ipcMain.handle(IPC_CHANNELS.authStatus, async () => {
     const user = userRepository.getCurrent();

@@ -79,6 +79,9 @@ export const userRepository = {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
+  },
+  clearAll() {
+    getDb().prepare("DELETE FROM users").run();
   }
 };
 
@@ -128,6 +131,9 @@ export const calendarRepository = {
     return getDb()
       .prepare("SELECT * FROM calendars WHERE provider_calendar_id = ?")
       .get(providerCalendarId) as { id: string } | undefined;
+  },
+  clearAll() {
+    getDb().prepare("DELETE FROM calendars").run();
   }
 };
 
@@ -240,6 +246,9 @@ export const eventRepository = {
   },
   clearRemoteCache() {
     getDb().prepare("DELETE FROM events WHERE provider_event_id IS NOT NULL").run();
+  },
+  clearAll() {
+    getDb().prepare("DELETE FROM events").run();
   },
   getById(id: string) {
     const row = getDb().prepare("SELECT * FROM events WHERE id = ?").get(id) as DbEvent | undefined;
@@ -363,6 +372,10 @@ export const syncRepository = {
     getDb()
       .prepare("UPDATE sync_state SET sync_token = NULL, updated_at = ? WHERE provider = 'google'")
       .run(nowIso());
+  },
+  clearAll() {
+    getDb().prepare("DELETE FROM sync_queue").run();
+    getDb().prepare("DELETE FROM sync_state").run();
   }
 };
 
