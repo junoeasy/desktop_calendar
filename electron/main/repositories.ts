@@ -172,15 +172,18 @@ function mapEvent(row: DbEvent): EventEntity {
 export const eventRepository = {
   listByDay(dateIso: string) {
     const day = dayjs(dateIso).format("YYYY-MM-DD");
+    const dayStart = `${day} 00:00:00`;
+    const dayEnd = `${day} 23:59:59`;
     return (getDb()
       .prepare(
         `SELECT * FROM events
          WHERE deleted_at IS NULL
-           AND date(datetime(starts_at), 'localtime') = date(?)
+           AND julianday(datetime(starts_at, 'localtime')) <= julianday(datetime(?))
+           AND julianday(datetime(ends_at, 'localtime')) >= julianday(datetime(?))
            AND calendar_id IN (SELECT id FROM calendars WHERE selected = 1)
          ORDER BY starts_at ASC`
       )
-      .all(day) as DbEvent[]).map(mapEvent);
+      .all(dayEnd, dayStart) as DbEvent[]).map(mapEvent);
   },
   listByMonth(year: number, month: number) {
     const start = dayjs(`${year}-${String(month).padStart(2, "0")}-01`).startOf("month").toISOString();
