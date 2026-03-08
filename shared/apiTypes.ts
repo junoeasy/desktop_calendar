@@ -28,6 +28,25 @@ export type SyncStatus = {
   lastError: string | null;
 };
 
+export type StudyTimerCompletion = {
+  completedAt: string;
+  savedToCalendar: boolean;
+  eventId: string | null;
+  message: string;
+};
+
+export type StudyTimerStatus = {
+  running: boolean;
+  durationMinutes: number;
+  startedAt: string | null;
+  elapsedSeconds: number;
+  remainingSeconds: number;
+  progress: number;
+  elapsedLabel: string;
+  remainingLabel: string;
+  lastResult: StudyTimerCompletion | null;
+};
+
 export type SummaryEvent = {
   id: string;
   title: string;
@@ -66,6 +85,12 @@ export type DesktopCalBridge = {
   sync: {
     now: (payload?: { forceFull?: boolean }) => Promise<SyncStatus>;
     status: () => Promise<SyncStatus>;
+  };
+  timer: {
+    start: (payload?: { durationMinutes?: number }) => Promise<StudyTimerStatus>;
+    stop: () => Promise<StudyTimerStatus>;
+    complete: () => Promise<StudyTimerStatus & { completed: StudyTimerCompletion | null }>;
+    status: () => Promise<StudyTimerStatus>;
   };
   summary: {
     get: () => Promise<NotificationSummaryPayload>;

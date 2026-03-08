@@ -5,6 +5,7 @@ import type { EventEntity } from "@shared/models";
 import { CalendarGrid } from "@/components/CalendarGrid";
 import { EventModal } from "@/components/EventModal";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { StudyTimerControls } from "@/components/StudyTimerControls";
 import { useCreateEvent, useDayEvents, useDeleteEvent, useMonthEvents, useSettings, useSyncNow, useUpdateEvent } from "@/hooks/useCalendarData";
 import { monthLabel } from "@/lib/day";
 import { useAppStore } from "@/lib/store";
@@ -151,6 +152,7 @@ export function App() {
               {authMessage ? <span className="ml-2 truncate">| {authMessage}</span> : null}
             </div>
             <div className="app-no-drag flex items-center gap-2">
+              <StudyTimerControls />
               <button
                 className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
                 onClick={async () => {

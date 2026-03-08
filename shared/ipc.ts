@@ -24,6 +24,10 @@ export const syncTriggerSchema = z.object({
   forceFull: z.boolean().optional()
 });
 
+export const timerStartSchema = z.object({
+  durationMinutes: z.number().int().min(1).max(720).optional()
+});
+
 export const settingsUpdateSchema = z.object({
   startupLaunch: z.boolean().optional(),
   minimizeToTray: z.boolean().optional(),
@@ -48,6 +52,7 @@ export type EventUpsertInput = z.infer<typeof eventUpsertSchema>;
 export type EventDeleteInput = z.infer<typeof eventDeleteSchema>;
 export type MonthQueryInput = z.infer<typeof monthQuerySchema>;
 export type SyncTriggerInput = z.infer<typeof syncTriggerSchema>;
+export type TimerStartInput = z.infer<typeof timerStartSchema>;
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
 export type CalendarSelectionInput = z.infer<typeof calendarSelectionSchema>;
 export type CalendarColorInput = z.infer<typeof calendarColorSchema>;
@@ -68,6 +73,10 @@ export const IPC_CHANNELS = {
   eventDelete: "event:delete",
   syncNow: "sync:now",
   syncStatus: "sync:status",
+  timerStart: "timer:start",
+  timerStop: "timer:stop",
+  timerComplete: "timer:complete",
+  timerStatus: "timer:status",
   summaryGet: "summary:get",
   desktopPinned: "window:desktop-pinned",
   setTrayMinimize: "window:tray-minimize"

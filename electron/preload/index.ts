@@ -28,6 +28,12 @@ const api = {
     now: (payload?: unknown) => ipcRenderer.invoke(IPC_CHANNELS.syncNow, payload ?? {}),
     status: () => ipcRenderer.invoke(IPC_CHANNELS.syncStatus)
   },
+  timer: {
+    start: (payload?: unknown) => ipcRenderer.invoke(IPC_CHANNELS.timerStart, payload ?? {}),
+    stop: () => ipcRenderer.invoke(IPC_CHANNELS.timerStop),
+    complete: () => ipcRenderer.invoke(IPC_CHANNELS.timerComplete),
+    status: () => ipcRenderer.invoke(IPC_CHANNELS.timerStatus)
+  },
   summary: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.summaryGet)
   },

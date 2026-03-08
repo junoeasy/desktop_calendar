@@ -1,10 +1,11 @@
 import { BrowserWindow, ipcMain } from "electron";
 import dayjs from "dayjs";
-import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, settingsUpdateSchema, syncTriggerSchema } from "../../shared/ipc";
+import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, settingsUpdateSchema, syncTriggerSchema, timerStartSchema } from "../../shared/ipc";
 import { calendarRepository, eventRepository, settingsRepository, syncRepository, userRepository } from "./repositories";
 import { hasGoogleToken, signInWithGoogle, signOutGoogle } from "./googleAuth";
 import { getSyncStatus, runSync, syncCalendarsFromGoogle } from "./syncEngine";
 import { buildQueuePayload } from "./queueMapper";
+import { completeStudyTimer, getStudyTimerStatus, startStudyTimer, stopStudyTimer } from "./studyTimer";
 import type { CalendarRow } from "../../shared/apiTypes";
 
 function dayList(year: number, month: number) {
@@ -52,7 +53,12 @@ function summaryPayload() {
   };
 }
 
-export function registerIpc(mainWindow: BrowserWindow) {
+type RegisterIpcOptions = {
+  showTimerOverlayWindow: () => void;
+  hideTimerOverlayWindow: () => void;
+};
+
+export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptions) {
   ipcMain.handle(IPC_CHANNELS.authSignIn, async () => {
     try {
       const result = await signInWithGoogle();
@@ -198,6 +204,25 @@ export function registerIpc(mainWindow: BrowserWindow) {
   });
 
   ipcMain.handle(IPC_CHANNELS.syncStatus, async () => getSyncStatus());
+  ipcMain.handle(IPC_CHANNELS.timerStart, async (_e, payload: unknown) => {
+    const input = timerStartSchema.parse(payload ?? {});
+    const status = startStudyTimer(input.durationMinutes);
+    if (status.running) {
+      options.showTimerOverlayWindow();
+    }
+    return status;
+  });
+  ipcMain.handle(IPC_CHANNELS.timerStop, async () => {
+    const status = stopStudyTimer();
+    options.hideTimerOverlayWindow();
+    return status;
+  });
+  ipcMain.handle(IPC_CHANNELS.timerComplete, async () => {
+    const status = completeStudyTimer();
+    options.hideTimerOverlayWindow();
+    return status;
+  });
+  ipcMain.handle(IPC_CHANNELS.timerStatus, async () => getStudyTimerStatus());
   ipcMain.handle(IPC_CHANNELS.summaryGet, async () => summaryPayload());
 
   ipcMain.handle(IPC_CHANNELS.desktopPinned, async (_e, pinned: boolean) => {

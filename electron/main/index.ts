@@ -9,6 +9,7 @@ import { registerIpc } from "./ipc";
 import { closeDb } from "./db";
 import { runSync } from "./syncEngine";
 import { eventRepository, settingsRepository } from "./repositories";
+import { hideTimerOverlayWindow, showTimerOverlayWindow } from "./timerOverlay";
 
 let mainWindow: BrowserWindow | null = null;
 let syncTimer: NodeJS.Timeout | null = null;
@@ -163,7 +164,7 @@ async function bootstrap() {
   mainWindow.setMovable(!settings.desktopPinned);
   mainWindow.setSkipTaskbar(settings.desktopPinned);
 
-  registerIpc(mainWindow);
+  registerIpc(mainWindow, { showTimerOverlayWindow, hideTimerOverlayWindow });
   createTray(mainWindow);
   configureAutoLaunch();
   configureSyncTimer();
@@ -204,6 +205,7 @@ app.on("window-all-closed", () => {
     if (syncTimer) clearInterval(syncTimer);
     if (realtimeSyncTimer) clearInterval(realtimeSyncTimer);
     if (reminderTimer) clearInterval(reminderTimer);
+    hideTimerOverlayWindow();
     closeDb();
     app.quit();
   }
