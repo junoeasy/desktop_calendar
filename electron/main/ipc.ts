@@ -8,6 +8,24 @@ import { buildQueuePayload } from "./queueMapper";
 import { completeStudyTimer, getStudyTimerStatus, pauseStudyTimer, resumeStudyTimer, startStudyTimer, stopStudyTimer } from "./studyTimer";
 import type { CalendarRow } from "../../shared/apiTypes";
 
+const WINDOW_MIN_WIDTH = 360;
+const WINDOW_MIN_HEIGHT = 280;
+const WINDOW_MAX_WIDTH = 10000;
+const WINDOW_MAX_HEIGHT = 10000;
+
+function applyDesktopPinnedMode(mainWindow: BrowserWindow, pinned: boolean) {
+  mainWindow.setResizable(!pinned);
+  mainWindow.setMaximizable(!pinned);
+  mainWindow.setMovable(!pinned);
+  mainWindow.setSkipTaskbar(pinned);
+
+  if (!pinned) {
+    // Unpin 시 이전 고정 상태의 크기 제한이 남지 않도록 명시적으로 초기화한다.
+    mainWindow.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT);
+    mainWindow.setMaximumSize(WINDOW_MAX_WIDTH, WINDOW_MAX_HEIGHT);
+  }
+}
+
 function dayList(year: number, month: number) {
   const events = eventRepository.listByMonth(year, month);
   const colors = new Map((calendarRepository.listAll() as CalendarRow[]).map((c) => [c.id, c.color_hex]));
@@ -99,10 +117,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
   ipcMain.handle(IPC_CHANNELS.settingsUpdate, async (_e, payload: unknown) => {
     const patch = settingsUpdateSchema.parse(payload);
     const settings = settingsRepository.update(patch);
-    mainWindow.setResizable(!settings.desktopPinned);
-    mainWindow.setMaximizable(!settings.desktopPinned);
-    mainWindow.setMovable(!settings.desktopPinned);
-    mainWindow.setSkipTaskbar(settings.desktopPinned);
+    applyDesktopPinnedMode(mainWindow, settings.desktopPinned);
     return settings;
   });
 
@@ -234,10 +249,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
   ipcMain.handle(IPC_CHANNELS.summaryGet, async () => summaryPayload());
 
   ipcMain.handle(IPC_CHANNELS.desktopPinned, async (_e, pinned: boolean) => {
-    mainWindow.setResizable(!pinned);
-    mainWindow.setMaximizable(!pinned);
-    mainWindow.setMovable(!pinned);
-    mainWindow.setSkipTaskbar(pinned);
+    applyDesktopPinnedMode(mainWindow, pinned);
     return { pinned };
   });
 
@@ -255,7 +267,16 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     if (!target || target.isDestroyed()) {
       return null;
     }
-    target.setSize(input.width, input.height);
+    if (target.isMaximized()) {
+      target.unmaximize();
+    }
+    const bounds = target.getBounds();
+    target.setBounds({
+      x: bounds.x,
+      y: bounds.y,
+      width: input.width,
+      height: input.height
+    });
     return target.getBounds();
   });
 }

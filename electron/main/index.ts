@@ -16,6 +16,10 @@ let syncTimer: NodeJS.Timeout | null = null;
 let realtimeSyncTimer: NodeJS.Timeout | null = null;
 let reminderTimer: NodeJS.Timeout | null = null;
 let isQuitting = false;
+const WINDOW_MIN_WIDTH = 360;
+const WINDOW_MIN_HEIGHT = 280;
+const WINDOW_MAX_WIDTH = 10000;
+const WINDOW_MAX_HEIGHT = 10000;
 
 const reminderStore = new Store<{ notifiedReminderKeys: Record<string, string> }>({
   name: "reminder-state",
@@ -163,6 +167,10 @@ async function bootstrap() {
   mainWindow.setMaximizable(!settings.desktopPinned);
   mainWindow.setMovable(!settings.desktopPinned);
   mainWindow.setSkipTaskbar(settings.desktopPinned);
+  if (!settings.desktopPinned) {
+    mainWindow.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT);
+    mainWindow.setMaximumSize(WINDOW_MAX_WIDTH, WINDOW_MAX_HEIGHT);
+  }
 
   registerIpc(mainWindow, { showTimerOverlayWindow, hideTimerOverlayWindow });
   createTray(mainWindow);
