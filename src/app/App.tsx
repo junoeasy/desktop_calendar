@@ -55,7 +55,7 @@ export function App() {
   const [calendarOpen, setCalendarOpen] = useState(true);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
-  const resizeSessionRef = useRef<{ pointerId: number; startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
+  const resizeSessionRef = useRef<{ pointerId: number; width: number; height: number } | null>(null);
   const resizePendingRef = useRef<{ width: number; height: number } | null>(null);
   const resizeRafRef = useRef<number | null>(null);
 
@@ -193,18 +193,18 @@ export function App() {
     const bounds = await window.desktopCalApi.window.getBounds();
     resizeSessionRef.current = {
       pointerId: event.pointerId,
-      startX: event.screenX,
-      startY: event.screenY,
-      startWidth: bounds?.width ?? window.innerWidth,
-      startHeight: bounds?.height ?? window.innerHeight
+      width: bounds?.width ?? window.innerWidth,
+      height: bounds?.height ?? window.innerHeight
     };
   };
 
   const onResizeHandlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const state = resizeSessionRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
-    const width = Math.max(360, state.startWidth + (event.screenX - state.startX));
-    const height = Math.max(280, state.startHeight + (event.screenY - state.startY));
+    const width = Math.max(360, state.width + event.movementX);
+    const height = Math.max(280, state.height + event.movementY);
+    state.width = width;
+    state.height = height;
     queueResize(width, height);
   };
 
