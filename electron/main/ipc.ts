@@ -81,6 +81,7 @@ function extractOpenClawText(payload: unknown): string | null {
     output_text?: string;
     content?: string;
     choices?: Array<{ message?: { content?: string }; text?: string }>;
+    output?: Array<{ content?: Array<{ text?: string }> }>;
   };
   if (typeof raw.content === "string" && raw.content.trim().length > 0) return raw.content.trim();
   if (typeof raw.reply === "string" && raw.reply.trim().length > 0) return raw.reply.trim();
@@ -92,6 +93,8 @@ function extractOpenClawText(payload: unknown): string | null {
   const firstChoice = raw.choices?.[0];
   if (firstChoice?.message?.content && firstChoice.message.content.trim().length > 0) return firstChoice.message.content.trim();
   if (firstChoice?.text && firstChoice.text.trim().length > 0) return firstChoice.text.trim();
+  const outputText = raw.output?.[0]?.content?.[0]?.text;
+  if (typeof outputText === "string" && outputText.trim().length > 0) return outputText.trim();
   return null;
 }
 
@@ -330,24 +333,42 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     }
 
     try {
-      const response = await fetch(endpoint, {
+      const send = async (url: string, requestBody: Record<string, unknown>) =>
+        fetch(url, {
         method: "POST",
         headers,
-        body: JSON.stringify(body)
+        body: JSON.stringify(requestBody)
       });
-      const rawText = await response.text();
-      let json: unknown = null;
-      try {
-        json = rawText ? JSON.parse(rawText) : null;
-      } catch {
-        json = null;
-      }
-      if (!response.ok) {
-        const detail = extractOpenClawText(json) ?? rawText;
-        return { ok: false, error: `OpenClaw 응답 오류 (${response.status})${detail ? `: ${detail}` : ""}` };
+
+      const parseResponse = async (response: Response) => {
+        const rawText = await response.text();
+        let json: unknown = null;
+        try {
+          json = rawText ? JSON.parse(rawText) : null;
+        } catch {
+          json = null;
+        }
+        return { response, rawText, json };
+      };
+
+      let parsed = await parseResponse(await send(endpoint, body));
+
+      // Some OpenClaw setups enable /v1/responses instead of /v1/chat/completions.
+      if (!parsed.response.ok && parsed.response.status === 405 && endpoint.includes("/v1/chat/completions")) {
+        const responsesEndpoint = endpoint.replace("/v1/chat/completions", "/v1/responses");
+        const fallbackBody: Record<string, unknown> = {
+          model: body.model ?? "openclaw:main",
+          input: messages.map((m) => `${m.role}: ${m.content}`).join("\n")
+        };
+        parsed = await parseResponse(await send(responsesEndpoint, fallbackBody));
       }
 
-      const content = extractOpenClawText(json) ?? rawText?.trim();
+      if (!parsed.response.ok) {
+        const detail = extractOpenClawText(parsed.json) ?? parsed.rawText;
+        return { ok: false, error: `OpenClaw 응답 오류 (${parsed.response.status})${detail ? `: ${detail}` : ""}` };
+      }
+
+      const content = extractOpenClawText(parsed.json) ?? parsed.rawText?.trim();
       if (!content) {
         return { ok: false, error: "OpenClaw 응답에서 메시지를 찾지 못했습니다." };
       }
