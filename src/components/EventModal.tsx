@@ -57,25 +57,9 @@ export function EventModal({ open, date, defaultCalendarId, editing, onClose, on
       <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl">
         <h2 className="mb-4 text-lg font-semibold">{editing ? "일정 수정" : "일정 추가"}</h2>
         <div className="space-y-3">
-          <input
-            className="w-full rounded border border-slate-300 px-3 py-2"
-            placeholder="제목"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <input
-            className="w-full rounded border border-slate-300 px-3 py-2"
-            placeholder="장소"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-          />
-          <textarea
-            className="w-full rounded border border-slate-300 px-3 py-2"
-            rows={3}
-            placeholder="메모"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
+          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="장소" value={location} onChange={(e) => setLocation(e.target.value)} />
+          <textarea className="w-full rounded border border-slate-300 px-3 py-2" rows={3} placeholder="메모" value={description} onChange={(e) => setDescription(e.target.value)} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
             하루 종일
