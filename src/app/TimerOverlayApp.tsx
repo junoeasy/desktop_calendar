@@ -47,7 +47,10 @@ export function TimerOverlayApp() {
         <div className="mt-2 h-2 w-full rounded-full bg-slate-700">
           <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${Math.round(status.progress * 100)}%` }} />
         </div>
-        <div className="mt-1 text-right text-[11px] text-slate-300">{Math.round(status.progress * 100)}%{status.paused ? " (일시정지)" : ""}</div>
+        <div className="mt-1 text-right text-[11px] text-slate-300">
+          {Math.round(status.progress * 100)}%
+          {status.paused ? " (일시정지)" : ""}
+        </div>
         <div className="app-no-drag mt-2 flex gap-2">
           {status.paused ? (
             <button
