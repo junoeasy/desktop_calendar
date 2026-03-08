@@ -19,6 +19,28 @@ function formatSummaryTime(startsAt: string, allDay: number) {
   return allDay ? dayjs(startsAt).format("M/D (ddd) 하루 종일") : dayjs(startsAt).format("M/D (ddd) HH:mm");
 }
 
+const UI_LABELS = {
+  syncChecking: "\uB3D9\uAE30\uD654 \uC0C1\uD0DC \uD655\uC778 \uC911...",
+  syncing: "\uB3D9\uAE30\uD654 \uC911",
+  waiting: "\uB300\uAE30 \uC911",
+  connectedPrefix: "\uC5F0\uACB0\uB428",
+  disconnected: "Google \uBBF8\uC5F0\uACB0",
+  recentSuccessPrefix: "\uCD5C\uADFC \uC131\uACF5",
+  errorPrefix: "\uC624\uB958",
+  summary: "\uC694\uC57D",
+  sync: "\uB3D9\uAE30\uD654",
+  syncFailedPrefix: "\uB3D9\uAE30\uD654 \uC2E4\uD328",
+  syncDone: "\uB3D9\uAE30\uD654 \uC644\uB8CC",
+  signedOut: "\uB85C\uADF8\uC544\uC6C3\uB428",
+  logout: "\uB85C\uADF8\uC544\uC6C3",
+  loginInProgress: "\uB85C\uADF8\uC778 \uC911...",
+  loginFailedPrefix: "\uB85C\uADF8\uC778 \uC2E4\uD328",
+  connectedDone: "\uC5F0\uACB0 \uC644\uB8CC",
+  loginGoogle: "Google \uB85C\uADF8\uC778",
+  settingsMenuTitle: "\uC124\uC815 \uBA54\uB274",
+  menu: "\uBA54\uB274"
+} as const;
+
 export function App() {
   const [auth, setAuth] = useState<{ connected: boolean; user?: { email: string } | null } | null>(null);
   const [authMessage, setAuthMessage] = useState("");
@@ -157,10 +179,10 @@ export function App() {
   const popupPanelStyle = { backgroundColor: "rgba(255, 255, 255, 0.96)" };
   const appBgStyle = { backgroundColor: "transparent" };
   const syncStatusLabel = !syncStatus
-    ? "동기화 상태 확인 중..."
+    ? UI_LABELS.syncChecking
     : syncStatus.running
-      ? "동기화 중"
-      : "대기 중";
+      ? UI_LABELS.syncing
+      : UI_LABELS.waiting;
   const syncStatusClass = !syncStatus
     ? "text-slate-500"
     : syncStatus.running
@@ -201,10 +223,10 @@ export function App() {
         <header className="relative rounded-xl border border-slate-200 px-3 py-2 shadow-sm" style={chromePanelStyle}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="app-drag flex min-h-8 flex-1 items-center rounded-md px-2 text-xs text-slate-600">
-              <span className="truncate">{auth?.connected ? `연결됨: ${auth?.user?.email ?? ""}` : "Google 미연결"}</span>
+              <span className="truncate">{auth?.connected ? `${UI_LABELS.connectedPrefix}: ${auth?.user?.email ?? ""}` : UI_LABELS.disconnected}</span>
               <span className={`ml-2 shrink-0 ${syncStatusClass}`}>{syncStatusLabel}</span>
-              {syncStatus?.lastSuccessAt ? <span className="ml-2 shrink-0 text-slate-500">최근 성공: {new Date(syncStatus.lastSuccessAt).toLocaleTimeString()}</span> : null}
-              {syncStatus?.lastError ? <span className="ml-2 truncate text-rose-600">오류: {syncStatus.lastError}</span> : null}
+              {syncStatus?.lastSuccessAt ? <span className="ml-2 shrink-0 text-slate-500">{UI_LABELS.recentSuccessPrefix}: {new Date(syncStatus.lastSuccessAt).toLocaleTimeString()}</span> : null}
+              {syncStatus?.lastError ? <span className="ml-2 truncate text-rose-600">{UI_LABELS.errorPrefix}: {syncStatus.lastError}</span> : null}
               {authMessage ? <span className="ml-2 truncate">| {authMessage}</span> : null}
             </div>
             <div className="app-no-drag flex items-center gap-2">
@@ -216,17 +238,17 @@ export function App() {
                   openSummaryPopup(payload);
                 }}
               >
-                요약
+                {UI_LABELS.summary}
               </button>
               <button
                 className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
                 onClick={async () => {
                   const next = await syncNow.mutateAsync();
                   setSyncStatus(next);
-                  setAuthMessage(next.lastError ? `동기화 실패: ${next.lastError}` : "동기화 완료");
+                  setAuthMessage(next.lastError ? `${UI_LABELS.syncFailedPrefix}: ${next.lastError}` : UI_LABELS.syncDone);
                 }}
               >
-                동기화
+                {UI_LABELS.sync}
               </button>
               {auth?.connected ? (
                 <button
@@ -234,27 +256,27 @@ export function App() {
                   onClick={async () => {
                     await window.desktopCalApi.auth.signOut();
                     setAuth({ connected: false });
-                    setAuthMessage("로그아웃됨");
+                    setAuthMessage(UI_LABELS.signedOut);
                   }}
                 >
-                  로그아웃
+                  {UI_LABELS.logout}
                 </button>
               ) : (
                 <button
                   className="rounded bg-accent px-2 py-1 text-xs font-medium text-white shadow-sm hover:brightness-95"
                   onClick={async () => {
-                    setAuthMessage("로그인 중...");
+                    setAuthMessage(UI_LABELS.loginInProgress);
                     const result = await window.desktopCalApi.auth.signIn();
                     if (!result.connected) {
-                      setAuthMessage(`로그인 실패: ${result.error}`);
+                      setAuthMessage(`${UI_LABELS.loginFailedPrefix}: ${result.error}`);
                       return;
                     }
                     setAuth({ connected: true, user: { email: result.user.email } });
                     setCalendars(result.calendars);
-                    setAuthMessage("연결 완료");
+                    setAuthMessage(UI_LABELS.connectedDone);
                   }}
                 >
-                  Google 로그인
+                  {UI_LABELS.loginGoogle}
                 </button>
               )}
 
@@ -262,9 +284,9 @@ export function App() {
                 ref={menuButtonRef}
                 className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
                 onClick={() => setMenuOpen((prev) => !prev)}
-                title="설정 메뉴"
+                title={UI_LABELS.settingsMenuTitle}
               >
-                메뉴
+                {UI_LABELS.menu}
               </button>
             </div>
           </div>
