@@ -206,13 +206,16 @@ export function App() {
   const onResizeHandleMouseDown = async (event: ReactMouseEvent<HTMLDivElement>) => {
     if (settings?.desktopPinned) return;
     event.preventDefault();
+    const startX = event.screenX;
+    const startY = event.screenY;
     const bounds = await window.desktopCalApi.window.getBounds();
-    if (!bounds) return;
+    const startWidth = bounds?.width ?? window.innerWidth;
+    const startHeight = bounds?.height ?? window.innerHeight;
     resizeStateRef.current = {
-      startX: event.screenX,
-      startY: event.screenY,
-      startWidth: bounds.width,
-      startHeight: bounds.height
+      startX,
+      startY,
+      startWidth,
+      startHeight
     };
     setIsResizing(true);
   };
@@ -527,10 +530,12 @@ export function App() {
 
       {settings && !settings.desktopPinned && (
         <div
-          className="app-no-drag fixed bottom-2 right-2 z-[90] h-4 w-4 cursor-nwse-resize rounded-sm border border-slate-400 bg-white/70 shadow-sm"
+          className="app-no-drag fixed bottom-2 right-2 z-[90] flex h-5 w-5 cursor-nwse-resize items-end justify-end rounded-sm border border-slate-400 bg-white/80 px-[2px] py-[1px] shadow-sm"
           onMouseDown={onResizeHandleMouseDown}
           title="창 크기 조절"
-        />
+        >
+          <span className="select-none text-[9px] leading-none text-slate-500">///</span>
+        </div>
       )}
     </div>
   );
