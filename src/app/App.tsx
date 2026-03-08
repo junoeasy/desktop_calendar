@@ -223,6 +223,15 @@ export function App() {
     resizeSessionRef.current = null;
   };
 
+  const resizeWindowBy = async (deltaWidth: number, deltaHeight: number) => {
+    if (settings?.desktopPinned) return;
+    const bounds = await window.desktopCalApi.window.getBounds();
+    if (!bounds) return;
+    const width = Math.max(360, Math.min(4096, bounds.width + deltaWidth));
+    const height = Math.max(280, Math.min(3072, bounds.height + deltaHeight));
+    await window.desktopCalApi.window.resize({ width, height });
+  };
+
   return (
     <div className="h-screen overflow-hidden p-3" style={appBgStyle}>
       <div className="mx-auto flex h-full max-w-[1450px] flex-col gap-2">
@@ -532,15 +541,31 @@ export function App() {
       />
 
       {settings && !settings.desktopPinned && (
-        <div
-          className="app-no-drag fixed bottom-2 right-2 z-[90] flex h-5 w-5 cursor-nwse-resize touch-none select-none items-end justify-end rounded-sm border border-slate-400 bg-white/80 px-[2px] py-[1px] shadow-sm"
-          onPointerDown={onResizeHandlePointerDown}
-          onPointerMove={onResizeHandlePointerMove}
-          onPointerUp={onResizeHandlePointerUp}
-          onPointerCancel={onResizeHandlePointerUp}
-          title="창 크기 조절"
-        >
-          <span className="select-none text-[9px] leading-none text-slate-500">///</span>
+        <div className="app-no-drag fixed bottom-2 right-2 z-[90] flex items-center gap-1">
+          <button
+            className="h-5 w-5 rounded border border-slate-400 bg-white/90 text-[11px] leading-none text-slate-700 shadow-sm hover:bg-white"
+            onClick={() => void resizeWindowBy(-60, -40)}
+            title="창 줄이기"
+          >
+            -
+          </button>
+          <button
+            className="h-5 w-5 rounded border border-slate-400 bg-white/90 text-[11px] leading-none text-slate-700 shadow-sm hover:bg-white"
+            onClick={() => void resizeWindowBy(60, 40)}
+            title="창 늘리기"
+          >
+            +
+          </button>
+          <div
+            className="flex h-5 w-5 cursor-nwse-resize touch-none select-none items-end justify-end rounded-sm border border-slate-400 bg-white/80 px-[2px] py-[1px] shadow-sm"
+            onPointerDown={onResizeHandlePointerDown}
+            onPointerMove={onResizeHandlePointerMove}
+            onPointerUp={onResizeHandlePointerUp}
+            onPointerCancel={onResizeHandlePointerUp}
+            title="창 크기 조절"
+          >
+            <span className="select-none text-[9px] leading-none text-slate-500">///</span>
+          </div>
         </div>
       )}
     </div>
