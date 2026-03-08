@@ -40,7 +40,9 @@ const api = {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.summaryGet)
   },
   window: {
-    setDesktopPinned: (pinned: boolean) => ipcRenderer.invoke(IPC_CHANNELS.desktopPinned, pinned)
+    setDesktopPinned: (pinned: boolean) => ipcRenderer.invoke(IPC_CHANNELS.desktopPinned, pinned),
+    getBounds: () => ipcRenderer.invoke(IPC_CHANNELS.windowGetBounds),
+    resize: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.windowResize, payload)
   },
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => {

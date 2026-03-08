@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
 import dayjs from "dayjs";
-import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, settingsUpdateSchema, syncTriggerSchema, timerStartSchema } from "../../shared/ipc";
+import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, settingsUpdateSchema, syncTriggerSchema, timerStartSchema, windowResizeSchema } from "../../shared/ipc";
 import { calendarRepository, eventRepository, settingsRepository, syncRepository, userRepository } from "./repositories";
 import { hasGoogleToken, signInWithGoogle, signOutGoogle } from "./googleAuth";
 import { getSyncStatus, runSync, syncCalendarsFromGoogle } from "./syncEngine";
@@ -239,5 +239,23 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     mainWindow.setMovable(!pinned);
     mainWindow.setSkipTaskbar(pinned);
     return { pinned };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.windowGetBounds, async (event) => {
+    const target = BrowserWindow.fromWebContents(event.sender);
+    if (!target || target.isDestroyed()) {
+      return null;
+    }
+    return target.getBounds();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.windowResize, async (event, payload: unknown) => {
+    const input = windowResizeSchema.parse(payload);
+    const target = BrowserWindow.fromWebContents(event.sender);
+    if (!target || target.isDestroyed()) {
+      return null;
+    }
+    target.setSize(input.width, input.height);
+    return target.getBounds();
   });
 }

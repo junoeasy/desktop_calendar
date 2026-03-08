@@ -49,6 +49,11 @@ export const calendarColorSchema = z.object({
   colorHex: z.string().regex(/^#[0-9a-fA-F]{6}$/)
 });
 
+export const windowResizeSchema = z.object({
+  width: z.number().int().min(640).max(4096),
+  height: z.number().int().min(480).max(3072)
+});
+
 export type EventUpsertInput = z.infer<typeof eventUpsertSchema>;
 export type EventDeleteInput = z.infer<typeof eventDeleteSchema>;
 export type MonthQueryInput = z.infer<typeof monthQuerySchema>;
@@ -57,6 +62,7 @@ export type TimerStartInput = z.infer<typeof timerStartSchema>;
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
 export type CalendarSelectionInput = z.infer<typeof calendarSelectionSchema>;
 export type CalendarColorInput = z.infer<typeof calendarColorSchema>;
+export type WindowResizeInput = z.infer<typeof windowResizeSchema>;
 
 export const IPC_CHANNELS = {
   authSignIn: "auth:sign-in",
@@ -82,6 +88,8 @@ export const IPC_CHANNELS = {
   timerStatus: "timer:status",
   summaryGet: "summary:get",
   desktopPinned: "window:desktop-pinned",
+  windowGetBounds: "window:get-bounds",
+  windowResize: "window:resize",
   setTrayMinimize: "window:tray-minimize"
 } as const;
 

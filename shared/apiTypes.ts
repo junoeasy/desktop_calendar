@@ -65,6 +65,13 @@ export type NotificationSummaryPayload = {
   week: SummaryEvent[];
 };
 
+export type WindowBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type DesktopCalBridge = {
   auth: {
     signIn: () => Promise<{ connected: true; user: User; calendars: CalendarRow[] } | { connected: false; error: string }>;
@@ -104,6 +111,8 @@ export type DesktopCalBridge = {
   };
   window: {
     setDesktopPinned: (pinned: boolean) => Promise<{ pinned: boolean }>;
+    getBounds: () => Promise<WindowBounds | null>;
+    resize: (payload: { width: number; height: number }) => Promise<WindowBounds | null>;
   };
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => () => void;
