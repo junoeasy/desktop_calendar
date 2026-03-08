@@ -55,7 +55,7 @@ export function App() {
   const [calendarOpen, setCalendarOpen] = useState(true);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
-  const resizeSessionRef = useRef<{ pointerId: number; width: number; height: number } | null>(null);
+  const resizeSessionRef = useRef<{ pointerId: number; lastX: number; lastY: number; width: number; height: number } | null>(null);
   const resizePendingRef = useRef<{ width: number; height: number } | null>(null);
   const resizeRafRef = useRef<number | null>(null);
 
@@ -193,6 +193,8 @@ export function App() {
     const bounds = await window.desktopCalApi.window.getBounds();
     resizeSessionRef.current = {
       pointerId: event.pointerId,
+      lastX: event.screenX,
+      lastY: event.screenY,
       width: bounds?.width ?? window.innerWidth,
       height: bounds?.height ?? window.innerHeight
     };
@@ -201,8 +203,12 @@ export function App() {
   const onResizeHandlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const state = resizeSessionRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
-    const width = Math.max(360, state.width + event.movementX);
-    const height = Math.max(280, state.height + event.movementY);
+    const deltaX = event.screenX - state.lastX;
+    const deltaY = event.screenY - state.lastY;
+    state.lastX = event.screenX;
+    state.lastY = event.screenY;
+    const width = Math.max(360, state.width + deltaX);
+    const height = Math.max(280, state.height + deltaY);
     state.width = width;
     state.height = height;
     queueResize(width, height);
@@ -211,6 +217,9 @@ export function App() {
   const onResizeHandlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     const state = resizeSessionRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     resizeSessionRef.current = null;
   };
 
