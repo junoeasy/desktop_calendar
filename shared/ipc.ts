@@ -50,8 +50,8 @@ export const calendarColorSchema = z.object({
 });
 
 export const windowResizeSchema = z.object({
-  width: z.number().int().min(640).max(4096),
-  height: z.number().int().min(480).max(3072)
+  width: z.number().int().min(360).max(4096),
+  height: z.number().int().min(280).max(3072)
 });
 
 export type EventUpsertInput = z.infer<typeof eventUpsertSchema>;

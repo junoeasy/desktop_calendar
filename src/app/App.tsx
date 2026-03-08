@@ -189,6 +189,7 @@ export function App() {
   const onResizeHandlePointerDown = async (event: ReactPointerEvent<HTMLDivElement>) => {
     if (settings?.desktopPinned) return;
     event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
     const bounds = await window.desktopCalApi.window.getBounds();
     resizeSessionRef.current = {
       pointerId: event.pointerId,
@@ -197,15 +198,13 @@ export function App() {
       startWidth: bounds?.width ?? window.innerWidth,
       startHeight: bounds?.height ?? window.innerHeight
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const onResizeHandlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const state = resizeSessionRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
-    if ((event.buttons & 1) !== 1) return;
-    const width = Math.max(640, state.startWidth + (event.screenX - state.startX));
-    const height = Math.max(480, state.startHeight + (event.screenY - state.startY));
+    const width = Math.max(360, state.startWidth + (event.screenX - state.startX));
+    const height = Math.max(280, state.startHeight + (event.screenY - state.startY));
     queueResize(width, height);
   };
 
