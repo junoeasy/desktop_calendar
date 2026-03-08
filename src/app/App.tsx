@@ -4,6 +4,7 @@ import type { CalendarRow, NotificationSummaryPayload, SyncStatus } from "@share
 import type { EventEntity } from "@shared/models";
 import { CalendarGrid } from "@/components/CalendarGrid";
 import { EventModal } from "@/components/EventModal";
+import { OpenClawChatModal } from "@/components/OpenClawChatModal";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { StudyTimerControls } from "@/components/StudyTimerControls";
 import { useCreateEvent, useDayEvents, useDeleteEvent, useMonthEvents, useSettings, useSyncNow, useUpdateEvent } from "@/hooks/useCalendarData";
@@ -53,6 +54,7 @@ export function App() {
   const [calendars, setCalendars] = useState<CalendarRow[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(true);
+  const [openClawChatOpen, setOpenClawChatOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const resizeSessionRef = useRef<{ pointerId: number; lastX: number; lastY: number; width: number; height: number } | null>(null);
@@ -374,8 +376,7 @@ export function App() {
               <button
                 className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
                 onClick={() => {
-                  setEditing(null);
-                  setModalOpen(true);
+                  setOpenClawChatOpen(true);
                 }}
               >
                 일정 추가
@@ -539,6 +540,8 @@ export function App() {
           }
         }}
       />
+
+      <OpenClawChatModal open={openClawChatOpen} onClose={() => setOpenClawChatOpen(false)} />
 
       {settings && !settings.desktopPinned && (
         <div className="app-no-drag fixed bottom-2 right-2 z-[90] flex items-center gap-1">

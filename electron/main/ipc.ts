@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
 import dayjs from "dayjs";
-import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, settingsUpdateSchema, syncTriggerSchema, timerStartSchema, windowResizeSchema } from "../../shared/ipc";
+import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, openClawChatSchema, settingsUpdateSchema, syncTriggerSchema, timerStartSchema, windowResizeSchema } from "../../shared/ipc";
 import { calendarRepository, eventRepository, settingsRepository, syncRepository, userRepository } from "./repositories";
 import { hasGoogleToken, signInWithGoogle, signOutGoogle } from "./googleAuth";
 import { getSyncStatus, runSync, syncCalendarsFromGoogle } from "./syncEngine";
@@ -69,6 +69,30 @@ function summaryPayload() {
     today,
     week
   };
+}
+
+function extractOpenClawText(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const raw = payload as {
+    message?: string | { content?: string };
+    reply?: string;
+    output_text?: string;
+    content?: string;
+    choices?: Array<{ message?: { content?: string }; text?: string }>;
+  };
+  if (typeof raw.content === "string" && raw.content.trim().length > 0) return raw.content.trim();
+  if (typeof raw.reply === "string" && raw.reply.trim().length > 0) return raw.reply.trim();
+  if (typeof raw.output_text === "string" && raw.output_text.trim().length > 0) return raw.output_text.trim();
+  if (typeof raw.message === "string" && raw.message.trim().length > 0) return raw.message.trim();
+  if (raw.message && typeof raw.message === "object" && typeof raw.message.content === "string" && raw.message.content.trim().length > 0) {
+    return raw.message.content.trim();
+  }
+  const firstChoice = raw.choices?.[0];
+  if (firstChoice?.message?.content && firstChoice.message.content.trim().length > 0) return firstChoice.message.content.trim();
+  if (firstChoice?.text && firstChoice.text.trim().length > 0) return firstChoice.text.trim();
+  return null;
 }
 
 type RegisterIpcOptions = {
@@ -278,5 +302,61 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
       height: input.height
     });
     return target.getBounds();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.openClawChat, async (_event, payload: unknown) => {
+    const input = openClawChatSchema.parse(payload);
+    const endpoint = process.env.OPENCLAW_CHAT_URL?.trim();
+    if (!endpoint) {
+      return { ok: false, error: "OPENCLAW_CHAT_URL 환경변수가 설정되지 않았습니다." };
+    }
+
+    const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
+    const body: Record<string, unknown> = {
+      messages,
+      message: input.message,
+      stream: false
+    };
+    if (process.env.OPENCLAW_MODEL?.trim()) {
+      body.model = process.env.OPENCLAW_MODEL.trim();
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    const apiKey = process.env.OPENCLAW_API_KEY?.trim();
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body)
+      });
+      const rawText = await response.text();
+      let json: unknown = null;
+      try {
+        json = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        json = null;
+      }
+      if (!response.ok) {
+        const detail = extractOpenClawText(json) ?? rawText;
+        return { ok: false, error: `OpenClaw 응답 오류 (${response.status})${detail ? `: ${detail}` : ""}` };
+      }
+
+      const content = extractOpenClawText(json) ?? rawText?.trim();
+      if (!content) {
+        return { ok: false, error: "OpenClaw 응답에서 메시지를 찾지 못했습니다." };
+      }
+      return { ok: true, content };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
   });
 }

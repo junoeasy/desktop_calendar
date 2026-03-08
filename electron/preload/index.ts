@@ -44,6 +44,9 @@ const api = {
     getBounds: () => ipcRenderer.invoke(IPC_CHANNELS.windowGetBounds),
     resize: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.windowResize, payload)
   },
+  openclaw: {
+    chat: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawChat, payload)
+  },
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, payload: NotificationSummaryPayload) => callback(payload);

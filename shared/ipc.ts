@@ -54,6 +54,19 @@ export const windowResizeSchema = z.object({
   height: z.number().int().min(280).max(3072)
 });
 
+export const openClawChatSchema = z.object({
+  message: z.string().min(1).max(4000),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(4000)
+      })
+    )
+    .max(50)
+    .optional()
+});
+
 export type EventUpsertInput = z.infer<typeof eventUpsertSchema>;
 export type EventDeleteInput = z.infer<typeof eventDeleteSchema>;
 export type MonthQueryInput = z.infer<typeof monthQuerySchema>;
@@ -63,6 +76,7 @@ export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
 export type CalendarSelectionInput = z.infer<typeof calendarSelectionSchema>;
 export type CalendarColorInput = z.infer<typeof calendarColorSchema>;
 export type WindowResizeInput = z.infer<typeof windowResizeSchema>;
+export type OpenClawChatInput = z.infer<typeof openClawChatSchema>;
 
 export const IPC_CHANNELS = {
   authSignIn: "auth:sign-in",
@@ -90,6 +104,7 @@ export const IPC_CHANNELS = {
   desktopPinned: "window:desktop-pinned",
   windowGetBounds: "window:get-bounds",
   windowResize: "window:resize",
+  openClawChat: "openclaw:chat",
   setTrayMinimize: "window:tray-minimize"
 } as const;
 

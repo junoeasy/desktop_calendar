@@ -117,4 +117,7 @@ export type DesktopCalBridge = {
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => () => void;
   };
+  openclaw: {
+    chat: (payload: { message: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<{ ok: true; content: string } | { ok: false; error: string }>;
+  };
 };
