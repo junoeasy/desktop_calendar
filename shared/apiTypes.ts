@@ -44,9 +44,11 @@ export type StudyTimerStatus = {
   startedAt: string | null;
   elapsedSeconds: number;
   remainingSeconds: number;
+  overtimeSeconds: number;
   progress: number;
   elapsedLabel: string;
   remainingLabel: string;
+  overtimeLabel: string;
   lastResult: StudyTimerCompletion | null;
 };
 

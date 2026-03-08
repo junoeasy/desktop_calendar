@@ -41,7 +41,9 @@ export function TimerOverlayApp() {
       <div className="app-drag flex h-full flex-col rounded-xl border border-slate-700 px-3 py-2 text-slate-100 shadow-lg" style={wrapperStyle}>
         <div className="text-[11px] text-slate-300">{status.problemName ?? "코테 문제"}</div>
         <div className="mt-1 text-3xl font-semibold tracking-wide">{status.elapsedLabel}</div>
-        <div className="text-xs text-slate-300">남은 시간 {status.remainingLabel}</div>
+        <div className="text-xs text-slate-300">
+          {status.overtimeSeconds > 0 ? `추가 시간 +${status.overtimeLabel}` : `남은 시간 ${status.remainingLabel}`}
+        </div>
         <div className="mt-2 h-2 w-full rounded-full bg-slate-700">
           <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${Math.round(status.progress * 100)}%` }} />
         </div>

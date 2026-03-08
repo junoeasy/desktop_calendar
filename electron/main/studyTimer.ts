@@ -75,9 +75,11 @@ export function getStudyTimerStatus() {
       startedAt: null,
       elapsedSeconds: 0,
       remainingSeconds: 0,
+      overtimeSeconds: 0,
       progress: 0,
       elapsedLabel: formatSeconds(0),
       remainingLabel: formatSeconds(0),
+      overtimeLabel: formatSeconds(0),
       lastResult
     };
   }
@@ -86,6 +88,7 @@ export function getStudyTimerStatus() {
   const elapsedSeconds = computeElapsedSeconds(now);
   const durationSeconds = session.durationMinutes * 60;
   const remainingSeconds = Math.max(0, durationSeconds - elapsedSeconds);
+  const overtimeSeconds = Math.max(0, elapsedSeconds - durationSeconds);
   const progress = Math.min(1, elapsedSeconds / durationSeconds);
   const paused = Boolean(session.pausedAtIso);
 
@@ -98,9 +101,11 @@ export function getStudyTimerStatus() {
     startedAt: session.startedAtIso,
     elapsedSeconds,
     remainingSeconds,
+    overtimeSeconds,
     progress,
     elapsedLabel: formatSeconds(elapsedSeconds),
     remainingLabel: formatSeconds(remainingSeconds),
+    overtimeLabel: formatSeconds(overtimeSeconds),
     lastResult
   };
 }
@@ -156,7 +161,6 @@ export function completeStudyTimer() {
   const selectedCalendars = calendarRepository.listSelected() as Array<{
     id: string;
     provider_calendar_id: string;
-    title: string;
   }>;
   const primary = selectedCalendars[0];
 

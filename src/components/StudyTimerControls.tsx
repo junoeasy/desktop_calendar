@@ -35,11 +35,13 @@ export function StudyTimerControls() {
     };
   }, []);
 
+  const overtimeText = status && status.overtimeSeconds > 0 ? ` +${status.overtimeLabel}` : "";
+
   return (
     <div className="app-no-drag flex items-center gap-1.5">
-      <span className="max-w-[280px] truncate text-[11px] text-slate-600">
+      <span className="max-w-[300px] truncate text-[11px] text-slate-600">
         {status?.active
-          ? `${status.problemName ?? "코테 문제"} ${status.elapsedLabel} / ${String(status.durationMinutes).padStart(2, "0")}:00:00 (${formatPercent(status.progress)})${status.paused ? " [일시정지]" : ""}`
+          ? `${status.problemName ?? "코테 문제"} ${status.elapsedLabel} / ${String(status.durationMinutes).padStart(2, "0")}:00:00 (${formatPercent(status.progress)})${overtimeText}${status.paused ? " [일시정지]" : ""}`
           : "코테 타이머 대기"}
       </span>
 
@@ -54,10 +56,7 @@ export function StudyTimerControls() {
           <button
             className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
             onClick={async () => {
-              const next = await window.desktopCalApi.timer.start({
-                durationMinutes: DEFAULT_DURATION_MINUTES,
-                problemName
-              });
+              const next = await window.desktopCalApi.timer.start({ durationMinutes: DEFAULT_DURATION_MINUTES, problemName });
               setStatus(next);
               setMessage("4시간 타이머를 시작했습니다.");
             }}
