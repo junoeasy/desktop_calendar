@@ -386,24 +386,35 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
       let lastParsed: { response: Response; rawText: string; json: unknown } | null = null;
 
       for (const candidate of endpointCandidates) {
-        const requestBody =
+        const responsesBody: Record<string, unknown> = {
+          model: body.model ?? "openclaw:main",
+          input: messages.map((m) => `${m.role}: ${m.content}`).join("\n")
+        };
+        const requestBodies =
           candidate.includes("/responses") || candidate.endsWith("/responses")
-            ? ({
-                model: body.model ?? "openclaw:main",
-                input: messages.map((m) => `${m.role}: ${m.content}`).join("\n")
-              } as Record<string, unknown>)
-            : body;
+            ? [responsesBody]
+            : [body, responsesBody];
 
-        const parsed = await parseResponse(await send(candidate, requestBody));
-        lastParsed = parsed;
-        if (parsed.response.ok) {
-          const content = extractOpenClawText(parsed.json) ?? parsed.rawText?.trim();
-          if (!content) {
-            return { ok: false, error: "OpenClaw 응답에서 메시지를 찾지 못했습니다." };
+        for (const requestBody of requestBodies) {
+          const parsed = await parseResponse(await send(candidate, requestBody));
+          lastParsed = parsed;
+          if (parsed.response.ok) {
+            const content = extractOpenClawText(parsed.json) ?? parsed.rawText?.trim();
+            if (!content) {
+              return { ok: false, error: "OpenClaw 응답에서 메시지를 찾지 못했습니다." };
+            }
+            return { ok: true, content };
           }
-          return { ok: true, content };
-        }
-        if (parsed.response.status !== 404 && parsed.response.status !== 405) {
+
+          // Endpoint/path mismatch cases: try other candidates.
+          if (parsed.response.status === 404 || parsed.response.status === 405) {
+            continue;
+          }
+          // Body schema mismatch cases (chat vs responses): try the next body shape first.
+          if (parsed.response.status === 400) {
+            continue;
+          }
+
           const detail = extractOpenClawText(parsed.json) ?? parsed.rawText;
           return { ok: false, error: `OpenClaw 응답 오류 (${parsed.response.status})${detail ? `: ${detail}` : ""}` };
         }
