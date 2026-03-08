@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import dayjs from "dayjs";
 import type { CalendarRow, NotificationSummaryPayload, SyncStatus } from "@shared/apiTypes";
 import type { EventEntity } from "@shared/models";
@@ -53,10 +53,11 @@ export function App() {
   const [calendars, setCalendars] = useState<CalendarRow[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(true);
-  const [isResizing, setIsResizing] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
-  const resizeStateRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
+  const resizeSessionRef = useRef<{ pointerId: number; startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
+  const resizePendingRef = useRef<{ width: number; height: number } | null>(null);
+  const resizeRafRef = useRef<number | null>(null);
 
   const selectedDate = useAppStore((s) => s.selectedDate);
   const setSelectedDate = useAppStore((s) => s.setSelectedDate);
@@ -131,44 +132,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!isResizing) return;
-    let rafId = 0;
-    let nextSize: { width: number; height: number } | null = null;
-
-    const flushResize = () => {
-      rafId = 0;
-      if (!nextSize) return;
-      void window.desktopCalApi.window.resize(nextSize);
-      nextSize = null;
-    };
-
-    const onMouseMove = (event: MouseEvent) => {
-      const state = resizeStateRef.current;
-      if (!state) return;
-      const width = Math.max(640, state.startWidth + (event.screenX - state.startX));
-      const height = Math.max(480, state.startHeight + (event.screenY - state.startY));
-      nextSize = { width, height };
-      if (!rafId) {
-        rafId = window.requestAnimationFrame(flushResize);
-      }
-    };
-
-    const onMouseUp = () => {
-      setIsResizing(false);
-      resizeStateRef.current = null;
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-
     return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-      if (rafId) {
-        window.cancelAnimationFrame(rafId);
+      if (resizeRafRef.current !== null) {
+        window.cancelAnimationFrame(resizeRafRef.current);
       }
     };
-  }, [isResizing]);
+  }, []);
 
   const defaultCalendarId = useMemo(() => calendars.find((c) => c.selected === 1)?.id ?? null, [calendars]);
   const calendarTitleMap = useMemo(() => new Map(calendars.map((cal) => [cal.id, cal.title])), [calendars]);
@@ -203,21 +172,47 @@ export function App() {
     setMonth(next.year(), next.month() + 1);
   };
 
-  const onResizeHandleMouseDown = async (event: ReactMouseEvent<HTMLDivElement>) => {
+  const flushResize = () => {
+    resizeRafRef.current = null;
+    const next = resizePendingRef.current;
+    if (!next) return;
+    void window.desktopCalApi.window.resize(next);
+    resizePendingRef.current = null;
+  };
+
+  const queueResize = (width: number, height: number) => {
+    resizePendingRef.current = { width, height };
+    if (resizeRafRef.current !== null) return;
+    resizeRafRef.current = window.requestAnimationFrame(flushResize);
+  };
+
+  const onResizeHandlePointerDown = async (event: ReactPointerEvent<HTMLDivElement>) => {
     if (settings?.desktopPinned) return;
     event.preventDefault();
-    const startX = event.screenX;
-    const startY = event.screenY;
     const bounds = await window.desktopCalApi.window.getBounds();
-    const startWidth = bounds?.width ?? window.innerWidth;
-    const startHeight = bounds?.height ?? window.innerHeight;
-    resizeStateRef.current = {
-      startX,
-      startY,
-      startWidth,
-      startHeight
+    resizeSessionRef.current = {
+      pointerId: event.pointerId,
+      startX: event.screenX,
+      startY: event.screenY,
+      startWidth: bounds?.width ?? window.innerWidth,
+      startHeight: bounds?.height ?? window.innerHeight
     };
-    setIsResizing(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onResizeHandlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = resizeSessionRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    if ((event.buttons & 1) !== 1) return;
+    const width = Math.max(640, state.startWidth + (event.screenX - state.startX));
+    const height = Math.max(480, state.startHeight + (event.screenY - state.startY));
+    queueResize(width, height);
+  };
+
+  const onResizeHandlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = resizeSessionRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    resizeSessionRef.current = null;
   };
 
   return (
@@ -530,8 +525,11 @@ export function App() {
 
       {settings && !settings.desktopPinned && (
         <div
-          className="app-no-drag fixed bottom-2 right-2 z-[90] flex h-5 w-5 cursor-nwse-resize items-end justify-end rounded-sm border border-slate-400 bg-white/80 px-[2px] py-[1px] shadow-sm"
-          onMouseDown={onResizeHandleMouseDown}
+          className="app-no-drag fixed bottom-2 right-2 z-[90] flex h-5 w-5 cursor-nwse-resize touch-none select-none items-end justify-end rounded-sm border border-slate-400 bg-white/80 px-[2px] py-[1px] shadow-sm"
+          onPointerDown={onResizeHandlePointerDown}
+          onPointerMove={onResizeHandlePointerMove}
+          onPointerUp={onResizeHandlePointerUp}
+          onPointerCancel={onResizeHandlePointerUp}
           title="창 크기 조절"
         >
           <span className="select-none text-[9px] leading-none text-slate-500">///</span>
