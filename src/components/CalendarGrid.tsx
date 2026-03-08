@@ -39,7 +39,7 @@ export function CalendarGrid({ previews, onClickDate, onDoubleClickDate, panelOp
 
   return (
     <div className="grid h-full grid-cols-7 gap-1.5 rounded-xl border border-slate-200 p-2 shadow-sm" style={{ backgroundColor: `rgba(255, 255, 255, ${panelOpacity})` }}>
-      {["\uC77C", "\uC6D4", "\uD654", "\uC218", "\uBAA9", "\uAE08", "\uD1A0"].map((weekday) => (
+      {["일", "월", "화", "수", "목", "금", "토"].map((weekday) => (
         <div key={weekday} className="px-1 py-1 text-center text-[11px] font-semibold text-slate-500">
           {weekday}
         </div>
@@ -85,8 +85,8 @@ export function CalendarGrid({ previews, onClickDate, onDoubleClickDate, panelOp
                   {event.title}
                 </div>
               ))}
-              {(preview?.moreCount ?? 0) > 0 && <div className="text-[11px] text-slate-500">+{preview?.moreCount}\uAC1C \uB354\uBCF4\uAE30</div>}
-              {dayjs().format("YYYY-MM-DD") === iso && <div className="text-[10px] text-emerald-600">\uC624\uB298</div>}
+              {(preview?.moreCount ?? 0) > 0 && <div className="text-[11px] text-slate-500">+{preview?.moreCount}개 더보기</div>}
+              {dayjs().format("YYYY-MM-DD") === iso && <div className="text-[10px] text-emerald-600">오늘</div>}
             </div>
           </button>
         );
