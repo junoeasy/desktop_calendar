@@ -98,6 +98,37 @@ function extractOpenClawText(payload: unknown): string | null {
   return null;
 }
 
+function buildOpenClawCandidateEndpoints(endpoint: string): string[] {
+  const candidates = new Set<string>();
+  candidates.add(endpoint);
+
+  try {
+    const url = new URL(endpoint);
+    const addPath = (pathname: string, port?: string) => {
+      const next = new URL(url.toString());
+      next.pathname = pathname;
+      if (port) next.port = port;
+      candidates.add(next.toString());
+    };
+
+    addPath("/v1/chat/completions");
+    addPath("/v1/responses");
+    addPath("/chat/completions");
+    addPath("/responses");
+
+    if (url.port === "18789") {
+      addPath("/v1/chat/completions", "18792");
+      addPath("/v1/responses", "18792");
+      addPath("/chat/completions", "18792");
+      addPath("/responses", "18792");
+    }
+  } catch {
+    // Keep original endpoint only if URL parsing fails.
+  }
+
+  return Array.from(candidates);
+}
+
 type RegisterIpcOptions = {
   showTimerOverlayWindow: () => void;
   hideTimerOverlayWindow: () => void;
@@ -351,28 +382,38 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
         return { response, rawText, json };
       };
 
-      let parsed = await parseResponse(await send(endpoint, body));
+      const endpointCandidates = buildOpenClawCandidateEndpoints(endpoint);
+      let lastParsed: { response: Response; rawText: string; json: unknown } | null = null;
 
-      // Some OpenClaw setups enable /v1/responses instead of /v1/chat/completions.
-      if (!parsed.response.ok && parsed.response.status === 405 && endpoint.includes("/v1/chat/completions")) {
-        const responsesEndpoint = endpoint.replace("/v1/chat/completions", "/v1/responses");
-        const fallbackBody: Record<string, unknown> = {
-          model: body.model ?? "openclaw:main",
-          input: messages.map((m) => `${m.role}: ${m.content}`).join("\n")
-        };
-        parsed = await parseResponse(await send(responsesEndpoint, fallbackBody));
+      for (const candidate of endpointCandidates) {
+        const requestBody =
+          candidate.includes("/responses") || candidate.endsWith("/responses")
+            ? ({
+                model: body.model ?? "openclaw:main",
+                input: messages.map((m) => `${m.role}: ${m.content}`).join("\n")
+              } as Record<string, unknown>)
+            : body;
+
+        const parsed = await parseResponse(await send(candidate, requestBody));
+        lastParsed = parsed;
+        if (parsed.response.ok) {
+          const content = extractOpenClawText(parsed.json) ?? parsed.rawText?.trim();
+          if (!content) {
+            return { ok: false, error: "OpenClaw 응답에서 메시지를 찾지 못했습니다." };
+          }
+          return { ok: true, content };
+        }
+        if (parsed.response.status !== 404 && parsed.response.status !== 405) {
+          const detail = extractOpenClawText(parsed.json) ?? parsed.rawText;
+          return { ok: false, error: `OpenClaw 응답 오류 (${parsed.response.status})${detail ? `: ${detail}` : ""}` };
+        }
       }
 
-      if (!parsed.response.ok) {
-        const detail = extractOpenClawText(parsed.json) ?? parsed.rawText;
-        return { ok: false, error: `OpenClaw 응답 오류 (${parsed.response.status})${detail ? `: ${detail}` : ""}` };
+      if (lastParsed) {
+        const detail = extractOpenClawText(lastParsed.json) ?? lastParsed.rawText;
+        return { ok: false, error: `OpenClaw 응답 오류 (${lastParsed.response.status})${detail ? `: ${detail}` : ""}` };
       }
-
-      const content = extractOpenClawText(parsed.json) ?? parsed.rawText?.trim();
-      if (!content) {
-        return { ok: false, error: "OpenClaw 응답에서 메시지를 찾지 못했습니다." };
-      }
-      return { ok: true, content };
+      return { ok: false, error: "OpenClaw 엔드포인트를 찾지 못했습니다." };
     } catch (error) {
       return {
         ok: false,
