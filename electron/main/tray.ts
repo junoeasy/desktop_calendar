@@ -31,10 +31,10 @@ export function createTray(mainWindow: BrowserWindow) {
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "열기", click: () => mainWindow.show() },
-      { label: "숨기기", click: () => mainWindow.hide() },
+      { label: "\uC5F4\uAE30", click: () => mainWindow.show() },
+      { label: "\uC228\uAE30\uAE30", click: () => mainWindow.hide() },
       { type: "separator" },
-      { label: "종료", click: () => app.quit() }
+      { label: "\uC885\uB8CC", click: () => app.quit() }
     ])
   );
 

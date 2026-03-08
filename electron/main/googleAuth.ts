@@ -1,4 +1,4 @@
-import http from "node:http";
+﻿import http from "node:http";
 import path from "node:path";
 import { URL } from "node:url";
 import { exec } from "node:child_process";
@@ -114,7 +114,7 @@ function openExternalWithFallback(url: string) {
       .catch(() => {
         exec(`start "" "${url.replace(/"/g, '\\"')}"`, { shell: "cmd.exe" }, (error) => {
           if (error) {
-            reject(new Error("브라우저를 열 수 없습니다. 기본 브라우저 설정을 확인해주세요."));
+            reject(new Error("\uBE0C\uB77C\uC6B0\uC800\uB97C \uC5F4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uAE30\uBCF8 \uBE0C\uB77C\uC6B0\uC800 \uC124\uC815\uC744 \uD655\uC778\uD574\uC8FC\uC138\uC694."));
             return;
           }
           resolve();
@@ -167,3 +167,4 @@ export function getGoogleClient() {
 export function hasGoogleToken() {
   return Boolean(tokenStore.get("googleTokens"));
 }
+

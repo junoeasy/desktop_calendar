@@ -5,6 +5,18 @@ const wrapperStyle = {
   background: "rgba(15, 23, 42, 0.92)"
 };
 
+const LABELS = {
+  waiting: "\uD0C0\uC774\uBA38 \uB300\uAE30 \uC911",
+  fallbackProblem: "\uCF54\uD14C \uBB38\uC81C",
+  overtimePrefix: "\uCD94\uAC00 \uC2DC\uAC04 +",
+  remainingPrefix: "\uB0A8\uC740 \uC2DC\uAC04 ",
+  pausedTag: " (\uC77C\uC2DC\uC815\uC9C0)",
+  resume: "\uC7AC\uAC1C",
+  pause: "\uC77C\uC2DC\uC815\uC9C0",
+  complete: "\uC644\uB8CC",
+  stop: "\uC911\uC9C0"
+} as const;
+
 export function TimerOverlayApp() {
   const [status, setStatus] = useState<StudyTimerStatus | null>(null);
 
@@ -30,7 +42,7 @@ export function TimerOverlayApp() {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="rounded-xl border border-slate-700 px-4 py-3 text-sm text-slate-200" style={wrapperStyle}>
-          타이머 대기 중
+          {LABELS.waiting}
         </div>
       </div>
     );
@@ -39,17 +51,17 @@ export function TimerOverlayApp() {
   return (
     <div className="h-screen p-2">
       <div className="app-drag flex h-full flex-col rounded-xl border border-slate-700 px-3 py-2 text-slate-100 shadow-lg" style={wrapperStyle}>
-        <div className="text-[11px] text-slate-300">{status.problemName ?? "코테 문제"}</div>
+        <div className="text-[11px] text-slate-300">{status.problemName ?? LABELS.fallbackProblem}</div>
         <div className="mt-1 text-3xl font-semibold tracking-wide">{status.elapsedLabel}</div>
         <div className="text-xs text-slate-300">
-          {status.overtimeSeconds > 0 ? `추가 시간 +${status.overtimeLabel}` : `남은 시간 ${status.remainingLabel}`}
+          {status.overtimeSeconds > 0 ? `${LABELS.overtimePrefix}${status.overtimeLabel}` : `${LABELS.remainingPrefix}${status.remainingLabel}`}
         </div>
         <div className="mt-2 h-2 w-full rounded-full bg-slate-700">
           <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${Math.round(status.progress * 100)}%` }} />
         </div>
         <div className="mt-1 text-right text-[11px] text-slate-300">
           {Math.round(status.progress * 100)}%
-          {status.paused ? " (일시정지)" : ""}
+          {status.paused ? LABELS.pausedTag : ""}
         </div>
         <div className="app-no-drag mt-2 flex gap-2">
           {status.paused ? (
@@ -59,7 +71,7 @@ export function TimerOverlayApp() {
                 await window.desktopCalApi.timer.resume();
               }}
             >
-              재개
+              {LABELS.resume}
             </button>
           ) : (
             <button
@@ -68,7 +80,7 @@ export function TimerOverlayApp() {
                 await window.desktopCalApi.timer.pause();
               }}
             >
-              일시정지
+              {LABELS.pause}
             </button>
           )}
           <button
@@ -77,7 +89,7 @@ export function TimerOverlayApp() {
               await window.desktopCalApi.timer.complete();
             }}
           >
-            완료
+            {LABELS.complete}
           </button>
           <button
             className="rounded border border-slate-500 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
@@ -85,7 +97,7 @@ export function TimerOverlayApp() {
               await window.desktopCalApi.timer.stop();
             }}
           >
-            중지
+            {LABELS.stop}
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+ï»¿import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import dayjs from "dayjs";
 import type { CalendarRow, NotificationSummaryPayload, SyncStatus } from "@shared/apiTypes";
 import type { EventEntity } from "@shared/models";
@@ -11,12 +11,12 @@ import { monthLabel } from "@/lib/day";
 import { useAppStore } from "@/lib/store";
 
 function formatEventTime(event: EventEntity) {
-  if (event.allDay) return "ÇÏ·ç Á¾ÀÏ";
+  if (event.allDay) return "í•˜ë£¨ ì¢…ì¼";
   return `${dayjs(event.startsAt).format("HH:mm")} - ${dayjs(event.endsAt).format("HH:mm")}`;
 }
 
 function formatSummaryTime(startsAt: string, allDay: number) {
-  return allDay ? dayjs(startsAt).format("M/D (ddd) ÇÏ·ç Á¾ÀÏ") : dayjs(startsAt).format("M/D (ddd) HH:mm");
+  return allDay ? dayjs(startsAt).format("M/D (ddd) í•˜ë£¨ ì¢…ì¼") : dayjs(startsAt).format("M/D (ddd) HH:mm");
 }
 
 export function App() {
@@ -157,10 +157,10 @@ export function App() {
   const popupPanelStyle = { backgroundColor: "rgba(255, 255, 255, 0.96)" };
   const appBgStyle = { backgroundColor: "transparent" };
   const syncStatusLabel = !syncStatus
-    ? "µ¿±âÈ­ »óÅÂ È®ÀÎ Áß..."
+    ? "ë™ê¸°í™” ìƒíƒœ í™•ì¸ ì¤‘..."
     : syncStatus.running
-      ? "µ¿±âÈ­ Áß"
-      : "´ë±â Áß";
+      ? "ë™ê¸°í™” ì¤‘"
+      : "ëŒ€ê¸° ì¤‘";
   const syncStatusClass = !syncStatus
     ? "text-slate-500"
     : syncStatus.running
@@ -201,10 +201,10 @@ export function App() {
         <header className="relative rounded-xl border border-slate-200 px-3 py-2 shadow-sm" style={chromePanelStyle}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="app-drag flex min-h-8 flex-1 items-center rounded-md px-2 text-xs text-slate-600">
-              <span className="truncate">{auth?.connected ? `¿¬°áµÊ: ${auth?.user?.email ?? ""}` : "Google ¹Ì¿¬°á"}</span>
+              <span className="truncate">{auth?.connected ? `ì—°ê²°ë¨: ${auth?.user?.email ?? ""}` : "Google ë¯¸ì—°ê²°"}</span>
               <span className={`ml-2 shrink-0 ${syncStatusClass}`}>{syncStatusLabel}</span>
-              {syncStatus?.lastSuccessAt ? <span className="ml-2 shrink-0 text-slate-500">ÃÖ±Ù ¼º°ø: {new Date(syncStatus.lastSuccessAt).toLocaleTimeString()}</span> : null}
-              {syncStatus?.lastError ? <span className="ml-2 truncate text-rose-600">¿À·ù: {syncStatus.lastError}</span> : null}
+              {syncStatus?.lastSuccessAt ? <span className="ml-2 shrink-0 text-slate-500">ìµœê·¼ ì„±ê³µ: {new Date(syncStatus.lastSuccessAt).toLocaleTimeString()}</span> : null}
+              {syncStatus?.lastError ? <span className="ml-2 truncate text-rose-600">ì˜¤ë¥˜: {syncStatus.lastError}</span> : null}
               {authMessage ? <span className="ml-2 truncate">| {authMessage}</span> : null}
             </div>
             <div className="app-no-drag flex items-center gap-2">
@@ -216,17 +216,17 @@ export function App() {
                   openSummaryPopup(payload);
                 }}
               >
-                ¿ä¾à
+                ìš”ì•½
               </button>
               <button
                 className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
                 onClick={async () => {
                   const next = await syncNow.mutateAsync();
                   setSyncStatus(next);
-                  setAuthMessage(next.lastError ? `µ¿±âÈ­ ½ÇÆĞ: ${next.lastError}` : "µ¿±âÈ­ ¿Ï·á");
+                  setAuthMessage(next.lastError ? `ë™ê¸°í™” ì‹¤íŒ¨: ${next.lastError}` : "ë™ê¸°í™” ì™„ë£Œ");
                 }}
               >
-                µ¿±âÈ­
+                ë™ê¸°í™”
               </button>
               {auth?.connected ? (
                 <button
@@ -234,27 +234,27 @@ export function App() {
                   onClick={async () => {
                     await window.desktopCalApi.auth.signOut();
                     setAuth({ connected: false });
-                    setAuthMessage("·Î±×¾Æ¿ôµÊ");
+                    setAuthMessage("ë¡œê·¸ì•„ì›ƒë¨");
                   }}
                 >
-                  ·Î±×¾Æ¿ô
+                  ë¡œê·¸ì•„ì›ƒ
                 </button>
               ) : (
                 <button
                   className="rounded bg-accent px-2 py-1 text-xs font-medium text-white shadow-sm hover:brightness-95"
                   onClick={async () => {
-                    setAuthMessage("·Î±×ÀÎ Áß...");
+                    setAuthMessage("ë¡œê·¸ì¸ ì¤‘...");
                     const result = await window.desktopCalApi.auth.signIn();
                     if (!result.connected) {
-                      setAuthMessage(`·Î±×ÀÎ ½ÇÆĞ: ${result.error}`);
+                      setAuthMessage(`ë¡œê·¸ì¸ ì‹¤íŒ¨: ${result.error}`);
                       return;
                     }
                     setAuth({ connected: true, user: { email: result.user.email } });
                     setCalendars(result.calendars);
-                    setAuthMessage("¿¬°á ¿Ï·á");
+                    setAuthMessage("ì—°ê²° ì™„ë£Œ");
                   }}
                 >
-                  Google ·Î±×ÀÎ
+                  Google ë¡œê·¸ì¸
                 </button>
               )}
 
@@ -262,9 +262,9 @@ export function App() {
                 ref={menuButtonRef}
                 className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
                 onClick={() => setMenuOpen((prev) => !prev)}
-                title="¼³Á¤ ¸Ş´º"
+                title="ì„¤ì • ë©”ë‰´"
               >
-                ¸Ş´º
+                ë©”ë‰´
               </button>
             </div>
           </div>
@@ -286,7 +286,7 @@ export function App() {
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-semibold">Calendars</h3>
                   <button className="rounded border border-slate-300 bg-white/95 px-2 py-0.5 text-[11px] font-medium text-slate-800 shadow-sm hover:bg-white" onClick={() => setCalendarOpen((v) => !v)}>
-                    {calendarOpen ? "¼û±â±â" : "º¸ÀÌ±â"}
+                    {calendarOpen ? "ìˆ¨ê¸°ê¸°" : "ë³´ì´ê¸°"}
                   </button>
                 </div>
 
@@ -329,10 +329,10 @@ export function App() {
             <span className="text-base font-semibold">{monthLabel(year, month)}</span>
             <div className="flex items-center gap-1.5">
               <button className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white" onClick={goPrevMonth}>
-                ÀÌÀü
+                ì´ì „
               </button>
               <button className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white" onClick={goNextMonth}>
-                ´ÙÀ½
+                ë‹¤ìŒ
               </button>
               <button
                 className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
@@ -341,7 +341,7 @@ export function App() {
                   setModalOpen(true);
                 }}
               >
-                ÀÏÁ¤ Ãß°¡
+                ì¼ì • ì¶”ê°€
               </button>
             </div>
           </div>
@@ -381,7 +381,7 @@ export function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex select-none items-center justify-between">
-              <h3 className="text-base font-semibold">{selectedDate} ÀÏÁ¤</h3>
+              <h3 className="text-base font-semibold">{selectedDate} ì¼ì •</h3>
               <div className="flex items-center gap-1.5">
                 <button
                   className="rounded border border-slate-300 bg-white/95 px-2.5 py-1.5 text-sm font-medium text-slate-800 shadow-sm hover:bg-white"
@@ -391,10 +391,10 @@ export function App() {
                     setModalOpen(true);
                   }}
                 >
-                  Ãß°¡
+                  ì¶”ê°€
                 </button>
                 <button className="rounded border border-slate-300 bg-white/95 px-2.5 py-1.5 text-sm font-medium text-slate-800 shadow-sm hover:bg-white" onClick={() => setDayPopupOpen(false)}>
-                  ´İ±â
+                  ë‹«ê¸°
                 </button>
               </div>
             </div>
@@ -405,7 +405,7 @@ export function App() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-medium leading-snug">{event.title}</div>
                     <span className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600">
-                      {calendarTitleMap.get(event.calendarId) ?? "Ä¶¸°´õ"}
+                      {calendarTitleMap.get(event.calendarId) ?? "ìº˜ë¦°ë”"}
                     </span>
                   </div>
                   <div className="text-xs text-slate-500">{formatEventTime(event)}</div>
@@ -418,15 +418,15 @@ export function App() {
                         setModalOpen(true);
                       }}
                     >
-                      ¼öÁ¤
+                      ìˆ˜ì •
                     </button>
                     <button className="rounded border border-rose-300 bg-white/95 px-2.5 py-1 text-xs font-medium text-rose-600 shadow-sm hover:bg-rose-50" onClick={() => deleteEvent.mutate(event.id)}>
-                      »èÁ¦
+                      ì‚­ì œ
                     </button>
                   </div>
                 </li>
               ))}
-              {dayEvents.length === 0 && <li className="text-sm text-slate-500">ÀÏÁ¤ÀÌ ¾ø½À´Ï´Ù.</li>}
+              {dayEvents.length === 0 && <li className="text-sm text-slate-500">ì¼ì •ì´ ì—†ìŠµë‹ˆë‹¤.</li>}
             </ul>
           </div>
         </div>
@@ -453,14 +453,14 @@ export function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">ÀÏÁ¤ ¿ä¾à</h3>
+              <h3 className="text-sm font-semibold">ì¼ì • ìš”ì•½</h3>
               <button className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white" onClick={() => setSummaryPopupOpen(false)}>
-                ´İ±â
+                ë‹«ê¸°
               </button>
             </div>
 
             <section className="mb-3 rounded border border-slate-200 p-2">
-              <div className="mb-1 text-xs font-semibold text-slate-700">¿À´Ã ÀÏÁ¤</div>
+              <div className="mb-1 text-xs font-semibold text-slate-700">ì˜¤ëŠ˜ ì¼ì •</div>
               <ul className="space-y-1 text-xs">
                 {summaryPayload.today.map((event) => (
                   <li key={`today-${event.id}`} className="rounded border border-slate-100 px-2 py-1">
@@ -468,12 +468,12 @@ export function App() {
                     <div className="text-[11px] text-slate-500">{formatSummaryTime(event.startsAt, event.allDay)}</div>
                   </li>
                 ))}
-                {summaryPayload.today.length === 0 && <li className="text-slate-500">¿À´Ã ÀÏÁ¤ÀÌ ¾ø½À´Ï´Ù.</li>}
+                {summaryPayload.today.length === 0 && <li className="text-slate-500">ì˜¤ëŠ˜ ì¼ì •ì´ ì—†ìŠµë‹ˆë‹¤.</li>}
               </ul>
             </section>
 
             <section className="rounded border border-slate-200 p-2">
-              <div className="mb-1 text-xs font-semibold text-slate-700">7ÀÏ ÀÏÁ¤</div>
+              <div className="mb-1 text-xs font-semibold text-slate-700">7ì¼ ì¼ì •</div>
               <ul className="space-y-1 text-xs">
                 {summaryPayload.week.map((event) => (
                   <li key={`week-${event.id}-${event.startsAt}`} className="rounded border border-slate-100 px-2 py-1">
@@ -481,7 +481,7 @@ export function App() {
                     <div className="text-[11px] text-slate-500">{formatSummaryTime(event.startsAt, event.allDay)}</div>
                   </li>
                 ))}
-                {summaryPayload.week.length === 0 && <li className="text-slate-500">7ÀÏ ³» ÀÏÁ¤ÀÌ ¾ø½À´Ï´Ù.</li>}
+                {summaryPayload.week.length === 0 && <li className="text-slate-500">7ì¼ ë‚´ ì¼ì •ì´ ì—†ìŠµë‹ˆë‹¤.</li>}
               </ul>
             </section>
           </div>
@@ -507,9 +507,10 @@ export function App() {
         <div
           className="app-no-drag fixed bottom-2 right-2 z-[90] h-4 w-4 cursor-nwse-resize rounded-sm border border-slate-400 bg-white/70 shadow-sm"
           onMouseDown={onResizeHandleMouseDown}
-          title="Ã¢ Å©±â Á¶Àı"
+          title="ì°½ í¬ê¸° ì¡°ì ˆ"
         />
       )}
     </div>
   );
 }
+

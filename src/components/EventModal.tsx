@@ -55,14 +55,14 @@ export function EventModal({ open, date, defaultCalendarId, editing, onClose, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl">
-        <h2 className="mb-4 text-lg font-semibold">{editing ? "일정 수정" : "일정 추가"}</h2>
+        <h2 className="mb-4 text-lg font-semibold">{editing ? "\uC77C\uC815 \uC218\uC815" : "\uC77C\uC815 \uCD94\uAC00"}</h2>
         <div className="space-y-3">
-          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="장소" value={location} onChange={(e) => setLocation(e.target.value)} />
-          <textarea className="w-full rounded border border-slate-300 px-3 py-2" rows={3} placeholder="메모" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="\uC81C\uBAA9" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="\uC7A5\uC18C" value={location} onChange={(e) => setLocation(e.target.value)} />
+          <textarea className="w-full rounded border border-slate-300 px-3 py-2" rows={3} placeholder="\uBA54\uBAA8" value={description} onChange={(e) => setDescription(e.target.value)} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-            하루 종일
+            \uD558\uB8E8 \uC885\uC77C
           </label>
           {!allDay && (
             <div className="grid grid-cols-2 gap-2">
@@ -73,10 +73,10 @@ export function EventModal({ open, date, defaultCalendarId, editing, onClose, on
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button className="rounded border px-3 py-2" onClick={onClose} type="button">
-            취소
+            \uCDE8\uC18C
           </button>
           <button className="rounded bg-accent px-3 py-2 text-white" onClick={handleSubmit} disabled={submitting} type="button">
-            {submitting ? "저장 중..." : "저장"}
+            {submitting ? "\uC800\uC7A5 \uC911..." : "\uC800\uC7A5"}
           </button>
         </div>
       </div>
