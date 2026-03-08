@@ -25,7 +25,8 @@ export const syncTriggerSchema = z.object({
 });
 
 export const timerStartSchema = z.object({
-  durationMinutes: z.number().int().min(1).max(720).optional()
+  durationMinutes: z.number().int().min(1).max(720).optional(),
+  problemName: z.string().min(1).max(120).optional()
 });
 
 export const settingsUpdateSchema = z.object({
@@ -74,6 +75,8 @@ export const IPC_CHANNELS = {
   syncNow: "sync:now",
   syncStatus: "sync:status",
   timerStart: "timer:start",
+  timerPause: "timer:pause",
+  timerResume: "timer:resume",
   timerStop: "timer:stop",
   timerComplete: "timer:complete",
   timerStatus: "timer:status",

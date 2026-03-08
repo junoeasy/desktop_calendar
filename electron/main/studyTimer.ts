@@ -5,10 +5,14 @@ import { runSync } from "./syncEngine";
 const DEFAULT_DURATION_MINUTES = 240;
 const MIN_DURATION_MINUTES = 1;
 const MAX_DURATION_MINUTES = 720;
+const DEFAULT_PROBLEM_NAME = "코테 문제";
 
 type SessionState = {
   startedAtIso: string;
   durationMinutes: number;
+  problemName: string;
+  totalPausedSeconds: number;
+  pausedAtIso: string | null;
 };
 
 type CompleteResult = {
@@ -42,11 +46,32 @@ function formatSeconds(totalSeconds: number) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+function normalizeProblemName(name: string | undefined) {
+  const value = (name ?? "").trim();
+  if (!value) {
+    return DEFAULT_PROBLEM_NAME;
+  }
+  return value.slice(0, 120);
+}
+
+function computeElapsedSeconds(nowMs: number) {
+  if (!session) {
+    return 0;
+  }
+  const startedMs = new Date(session.startedAtIso).getTime();
+  const pausedNowSeconds = session.pausedAtIso ? Math.max(0, Math.floor((nowMs - new Date(session.pausedAtIso).getTime()) / 1000)) : 0;
+  const elapsed = Math.floor((nowMs - startedMs) / 1000) - session.totalPausedSeconds - pausedNowSeconds;
+  return Math.max(0, elapsed);
+}
+
 export function getStudyTimerStatus() {
   if (!session) {
     return {
+      active: false,
       running: false,
+      paused: false,
       durationMinutes: DEFAULT_DURATION_MINUTES,
+      problemName: null,
       startedAt: null,
       elapsedSeconds: 0,
       remainingSeconds: 0,
@@ -58,15 +83,18 @@ export function getStudyTimerStatus() {
   }
 
   const now = Date.now();
-  const started = new Date(session.startedAtIso).getTime();
-  const elapsedSeconds = Math.max(0, Math.floor((now - started) / 1000));
+  const elapsedSeconds = computeElapsedSeconds(now);
   const durationSeconds = session.durationMinutes * 60;
   const remainingSeconds = Math.max(0, durationSeconds - elapsedSeconds);
   const progress = Math.min(1, elapsedSeconds / durationSeconds);
+  const paused = Boolean(session.pausedAtIso);
 
   return {
-    running: true,
+    active: true,
+    running: !paused,
+    paused,
     durationMinutes: session.durationMinutes,
+    problemName: session.problemName,
     startedAt: session.startedAtIso,
     elapsedSeconds,
     remainingSeconds,
@@ -77,14 +105,37 @@ export function getStudyTimerStatus() {
   };
 }
 
-export function startStudyTimer(durationMinutes?: number) {
+export function startStudyTimer(durationMinutes?: number, problemName?: string) {
   if (session) {
     return getStudyTimerStatus();
   }
   session = {
     startedAtIso: new Date().toISOString(),
-    durationMinutes: clampDurationMinutes(durationMinutes)
+    durationMinutes: clampDurationMinutes(durationMinutes),
+    problemName: normalizeProblemName(problemName),
+    totalPausedSeconds: 0,
+    pausedAtIso: null
   };
+  return getStudyTimerStatus();
+}
+
+export function pauseStudyTimer() {
+  if (!session || session.pausedAtIso) {
+    return getStudyTimerStatus();
+  }
+  session.pausedAtIso = new Date().toISOString();
+  return getStudyTimerStatus();
+}
+
+export function resumeStudyTimer() {
+  if (!session || !session.pausedAtIso) {
+    return getStudyTimerStatus();
+  }
+  const pausedAt = new Date(session.pausedAtIso).getTime();
+  const now = Date.now();
+  const pausedSeconds = Math.max(0, Math.floor((now - pausedAt) / 1000));
+  session.totalPausedSeconds += pausedSeconds;
+  session.pausedAtIso = null;
   return getStudyTimerStatus();
 }
 
@@ -114,10 +165,11 @@ export function completeStudyTimer() {
   let message = "타이머가 완료되었습니다.";
 
   if (primary) {
+    const elapsedLabel = formatSeconds(computeElapsedSeconds(Date.now()));
     const created = eventRepository.upsertLocal({
       calendarId: primary.id,
-      title: "삼성 B형 코테 문제 풀이 완료",
-      description: `${session.durationMinutes}분 집중 세션 완료`,
+      title: `${session.problemName} (${elapsedLabel})`,
+      description: `${session.problemName} 풀이 완료, 총 진행 시간 ${elapsedLabel}`,
       location: null,
       startsAt: session.startedAtIso,
       endsAt: completedAt,

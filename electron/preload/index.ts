@@ -30,6 +30,8 @@ const api = {
   },
   timer: {
     start: (payload?: unknown) => ipcRenderer.invoke(IPC_CHANNELS.timerStart, payload ?? {}),
+    pause: () => ipcRenderer.invoke(IPC_CHANNELS.timerPause),
+    resume: () => ipcRenderer.invoke(IPC_CHANNELS.timerResume),
     stop: () => ipcRenderer.invoke(IPC_CHANNELS.timerStop),
     complete: () => ipcRenderer.invoke(IPC_CHANNELS.timerComplete),
     status: () => ipcRenderer.invoke(IPC_CHANNELS.timerStatus)

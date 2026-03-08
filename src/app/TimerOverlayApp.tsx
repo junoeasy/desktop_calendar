@@ -26,7 +26,7 @@ export function TimerOverlayApp() {
     };
   }, []);
 
-  if (!status?.running) {
+  if (!status?.active) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="rounded-xl border border-slate-700 px-4 py-3 text-sm text-slate-200" style={wrapperStyle}>
@@ -39,14 +39,33 @@ export function TimerOverlayApp() {
   return (
     <div className="h-screen p-2">
       <div className="app-drag flex h-full flex-col rounded-xl border border-slate-700 px-3 py-2 text-slate-100 shadow-lg" style={wrapperStyle}>
-        <div className="text-[11px] text-slate-300">삼성 B형 4시간 타이머</div>
+        <div className="text-[11px] text-slate-300">{status.problemName ?? "코테 문제"}</div>
         <div className="mt-1 text-3xl font-semibold tracking-wide">{status.elapsedLabel}</div>
         <div className="text-xs text-slate-300">남은 시간 {status.remainingLabel}</div>
         <div className="mt-2 h-2 w-full rounded-full bg-slate-700">
           <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${Math.round(status.progress * 100)}%` }} />
         </div>
-        <div className="mt-1 text-right text-[11px] text-slate-300">{Math.round(status.progress * 100)}%</div>
+        <div className="mt-1 text-right text-[11px] text-slate-300">{Math.round(status.progress * 100)}%{status.paused ? " (일시정지)" : ""}</div>
         <div className="app-no-drag mt-2 flex gap-2">
+          {status.paused ? (
+            <button
+              className="rounded bg-sky-500 px-2 py-1 text-xs font-medium text-white hover:bg-sky-400"
+              onClick={async () => {
+                await window.desktopCalApi.timer.resume();
+              }}
+            >
+              재개
+            </button>
+          ) : (
+            <button
+              className="rounded bg-amber-500 px-2 py-1 text-xs font-medium text-white hover:bg-amber-400"
+              onClick={async () => {
+                await window.desktopCalApi.timer.pause();
+              }}
+            >
+              일시정지
+            </button>
+          )}
           <button
             className="flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-400"
             onClick={async () => {

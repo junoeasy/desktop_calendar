@@ -36,8 +36,11 @@ export type StudyTimerCompletion = {
 };
 
 export type StudyTimerStatus = {
+  active: boolean;
   running: boolean;
+  paused: boolean;
   durationMinutes: number;
+  problemName: string | null;
   startedAt: string | null;
   elapsedSeconds: number;
   remainingSeconds: number;
@@ -87,7 +90,9 @@ export type DesktopCalBridge = {
     status: () => Promise<SyncStatus>;
   };
   timer: {
-    start: (payload?: { durationMinutes?: number }) => Promise<StudyTimerStatus>;
+    start: (payload?: { durationMinutes?: number; problemName?: string }) => Promise<StudyTimerStatus>;
+    pause: () => Promise<StudyTimerStatus>;
+    resume: () => Promise<StudyTimerStatus>;
     stop: () => Promise<StudyTimerStatus>;
     complete: () => Promise<StudyTimerStatus & { completed: StudyTimerCompletion | null }>;
     status: () => Promise<StudyTimerStatus>;

@@ -5,7 +5,7 @@ import { calendarRepository, eventRepository, settingsRepository, syncRepository
 import { hasGoogleToken, signInWithGoogle, signOutGoogle } from "./googleAuth";
 import { getSyncStatus, runSync, syncCalendarsFromGoogle } from "./syncEngine";
 import { buildQueuePayload } from "./queueMapper";
-import { completeStudyTimer, getStudyTimerStatus, startStudyTimer, stopStudyTimer } from "./studyTimer";
+import { completeStudyTimer, getStudyTimerStatus, pauseStudyTimer, resumeStudyTimer, startStudyTimer, stopStudyTimer } from "./studyTimer";
 import type { CalendarRow } from "../../shared/apiTypes";
 
 function dayList(year: number, month: number) {
@@ -206,8 +206,16 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
   ipcMain.handle(IPC_CHANNELS.syncStatus, async () => getSyncStatus());
   ipcMain.handle(IPC_CHANNELS.timerStart, async (_e, payload: unknown) => {
     const input = timerStartSchema.parse(payload ?? {});
-    const status = startStudyTimer(input.durationMinutes);
-    if (status.running) {
+    const status = startStudyTimer(input.durationMinutes, input.problemName);
+    if (status.active) {
+      options.showTimerOverlayWindow();
+    }
+    return status;
+  });
+  ipcMain.handle(IPC_CHANNELS.timerPause, async () => pauseStudyTimer());
+  ipcMain.handle(IPC_CHANNELS.timerResume, async () => {
+    const status = resumeStudyTimer();
+    if (status.active) {
       options.showTimerOverlayWindow();
     }
     return status;
