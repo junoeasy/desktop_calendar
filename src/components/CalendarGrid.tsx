@@ -49,6 +49,7 @@ export function CalendarGrid({ previews, onClickDate, onDoubleClickDate, panelOp
         const preview = previewMap.get(iso);
         const isCurrentMonth = day.month() + 1 === month;
         const isSelected = iso === selectedDate;
+        const isToday = dayjs().format("YYYY-MM-DD") === iso;
         const cellBg = isCurrentMonth ? `rgba(255, 255, 255, ${panelOpacity})` : `rgba(248, 250, 252, ${panelOpacity})`;
         return (
           <button
@@ -74,6 +75,7 @@ export function CalendarGrid({ previews, onClickDate, onDoubleClickDate, panelOp
             className={clsx(
               "flex min-h-24 flex-col items-start justify-start rounded-md border p-1.5 text-left transition",
               isCurrentMonth ? "border-slate-200" : "border-slate-100 text-slate-400",
+              isToday && !isSelected ? "border-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.5)]" : "",
               isSelected ? "ring-2 ring-accent" : "hover:border-accent/60"
             )}
             style={{ backgroundColor: cellBg }}
@@ -86,7 +88,7 @@ export function CalendarGrid({ previews, onClickDate, onDoubleClickDate, panelOp
                 </div>
               ))}
               {(preview?.moreCount ?? 0) > 0 && <div className="text-[11px] text-slate-500">+{preview?.moreCount}개 더보기</div>}
-              {dayjs().format("YYYY-MM-DD") === iso && <div className="text-[10px] text-emerald-600">오늘</div>}
+              {isToday && <div className="text-[10px] font-semibold text-emerald-600">오늘</div>}
             </div>
           </button>
         );

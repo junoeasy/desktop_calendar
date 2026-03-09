@@ -17,7 +17,11 @@ const LABELS = {
   resumedMessage: "\uD0C0\uC774\uBA38\uB97C \uC7AC\uAC1C\uD588\uC2B5\uB2C8\uB2E4.",
   pausedMessage: "\uD0C0\uC774\uBA38\uB97C \uC77C\uC2DC\uC815\uC9C0\uD588\uC2B5\uB2C8\uB2E4.",
   completedFallbackMessage: "\uC138\uC158\uC744 \uC644\uB8CC\uD588\uC2B5\uB2C8\uB2E4.",
-  stoppedMessage: "\uD0C0\uC774\uBA38\uB97C \uC911\uC9C0\uD588\uC2B5\uB2C8\uB2E4."
+  stoppedMessage: "\uD0C0\uC774\uBA38\uB97C \uC911\uC9C0\uD588\uC2B5\uB2C8\uB2E4.",
+  collapse: "\uC811\uAE30",
+  expand: "\uD3BC\uCE58\uAE30",
+  compactWaiting: "\uB300\uAE30",
+  compactActivePrefix: "\uC9C4\uD589"
 } as const;
 
 function formatPercent(progress: number) {
@@ -33,6 +37,7 @@ export function StudyTimerControls() {
   const [status, setStatus] = useState<StudyTimerStatus | null>(null);
   const [problemName, setProblemName] = useState(LABELS.defaultProblem);
   const [message, setMessage] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,16 +58,29 @@ export function StudyTimerControls() {
   }, []);
 
   const overtimeText = status && status.overtimeSeconds > 0 ? ` +${status.overtimeLabel}` : "";
+  const compactStatusText = status?.active
+    ? `${LABELS.compactActivePrefix} ${status.elapsedLabel} (${formatPercent(status.progress)})${status.paused ? LABELS.pauseTag : ""}`
+    : LABELS.compactWaiting;
 
   return (
     <div className="app-no-drag flex items-center gap-1.5">
+      <button
+        type="button"
+        className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
+        onClick={() => setCollapsed((prev) => !prev)}
+      >
+        {collapsed ? LABELS.expand : LABELS.collapse}
+      </button>
+
       <span className="max-w-[300px] truncate text-[11px] text-slate-600">
-        {status?.active
-          ? `${status.problemName ?? LABELS.fallbackProblem} ${status.elapsedLabel} / ${String(status.durationMinutes).padStart(2, "0")}:00:00 (${formatPercent(status.progress)})${overtimeText}${status.paused ? LABELS.pauseTag : ""}`
-          : LABELS.waiting}
+        {collapsed
+          ? compactStatusText
+          : status?.active
+            ? `${status.problemName ?? LABELS.fallbackProblem} ${status.elapsedLabel} / ${String(status.durationMinutes).padStart(2, "0")}:00:00 (${formatPercent(status.progress)})${overtimeText}${status.paused ? LABELS.pauseTag : ""}`
+            : LABELS.waiting}
       </span>
 
-      {!status?.active ? (
+      {!collapsed && !status?.active ? (
         <>
           <input
             className="w-36 rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs text-slate-800 shadow-sm"
@@ -81,7 +99,7 @@ export function StudyTimerControls() {
             {LABELS.start}
           </button>
         </>
-      ) : (
+      ) : !collapsed ? (
         <>
           {status.paused ? (
             <button
@@ -127,10 +145,22 @@ export function StudyTimerControls() {
             {LABELS.stop}
           </button>
         </>
-      )}
+      ) : null}
 
-      <span className="max-w-[220px] truncate text-[11px] text-slate-500">{message}</span>
-      <CompletionMessage result={status?.lastResult ?? null} />
+      {!collapsed ? (
+        <>
+          <span className="max-w-[220px] truncate text-[11px] text-slate-500">{message}</span>
+          <CompletionMessage result={status?.lastResult ?? null} />
+        </>
+      ) : null}
+
+      {collapsed && message ? (
+        <span className="max-w-[180px] truncate text-[11px] text-slate-500">{message}</span>
+      ) : null}
+
+      {collapsed && status?.lastResult ? (
+        <span className="max-w-[180px] truncate text-[11px] text-slate-500">{status.lastResult.message}</span>
+      ) : null}
     </div>
   );
 }

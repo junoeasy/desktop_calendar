@@ -388,7 +388,6 @@ export function App() {
             panelOpacity={calendarPanelOpacity}
             onClickDate={(date) => {
               setSelectedDate(date);
-              setDayPopupOpen(true);
             }}
             onDoubleClickDate={(date) => {
               setSelectedDate(date);
@@ -531,6 +530,7 @@ export function App() {
         date={selectedDate}
         editing={editing}
         defaultCalendarId={defaultCalendarId}
+        calendars={calendars}
         onClose={() => setModalOpen(false)}
         onSubmit={async (payload) => {
           if (payload.id) {
@@ -541,7 +541,7 @@ export function App() {
         }}
       />
 
-      <OpenClawChatModal open={openClawChatOpen} onClose={() => setOpenClawChatOpen(false)} />
+      <OpenClawChatModal open={openClawChatOpen} calendars={calendars} onClose={() => setOpenClawChatOpen(false)} />
 
       {settings && !settings.desktopPinned && (
         <div className="app-no-drag fixed bottom-2 right-2 z-[90] flex items-center gap-1">
