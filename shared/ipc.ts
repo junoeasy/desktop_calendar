@@ -50,12 +50,26 @@ export const calendarColorSchema = z.object({
 });
 
 export const windowResizeSchema = z.object({
-  width: z.number().int().min(360).max(4096),
-  height: z.number().int().min(280).max(3072)
+  width: z.number().int().min(220).max(4096),
+  height: z.number().int().min(90).max(3072)
 });
 
 export const openClawChatSchema = z.object({
   message: z.string().min(1).max(4000),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(4000)
+      })
+    )
+    .max(50)
+    .optional()
+});
+
+export const openClawCreateEventSchema = z.object({
+  message: z.string().min(1).max(4000),
+  calendarId: z.string().uuid().optional(),
   history: z
     .array(
       z.object({
@@ -77,6 +91,7 @@ export type CalendarSelectionInput = z.infer<typeof calendarSelectionSchema>;
 export type CalendarColorInput = z.infer<typeof calendarColorSchema>;
 export type WindowResizeInput = z.infer<typeof windowResizeSchema>;
 export type OpenClawChatInput = z.infer<typeof openClawChatSchema>;
+export type OpenClawCreateEventInput = z.infer<typeof openClawCreateEventSchema>;
 
 export const IPC_CHANNELS = {
   authSignIn: "auth:sign-in",
@@ -105,6 +120,7 @@ export const IPC_CHANNELS = {
   windowGetBounds: "window:get-bounds",
   windowResize: "window:resize",
   openClawChat: "openclaw:chat",
+  openClawCreateEvent: "openclaw:event-create",
   setTrayMinimize: "window:tray-minimize"
 } as const;
 

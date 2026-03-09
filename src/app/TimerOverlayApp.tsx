@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { StudyTimerStatus } from "@shared/apiTypes";
 
 const wrapperStyle = {
   background: "rgba(15, 23, 42, 0.92)"
 };
+const MIN_OVERLAY_WIDTH = 220;
+const MIN_OVERLAY_HEIGHT = 90;
 
 const LABELS = {
   waiting: "\uD0C0\uC774\uBA38 \uB300\uAE30 \uC911",
@@ -14,11 +16,15 @@ const LABELS = {
   resume: "\uC7AC\uAC1C",
   pause: "\uC77C\uC2DC\uC815\uC9C0",
   complete: "\uC644\uB8CC",
-  stop: "\uC911\uC9C0"
+  stop: "\uC911\uC9C0",
+  collapse: "\uC811\uAE30",
+  expand: "\uD3BC\uCE58\uAE30"
 } as const;
 
 export function TimerOverlayApp() {
   const [status, setStatus] = useState<StudyTimerStatus | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const expandedSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +44,28 @@ export function TimerOverlayApp() {
     };
   }, []);
 
+  const resizeOverlay = async (width: number, height: number) => {
+    await window.desktopCalApi.window.resize({
+      width: Math.max(MIN_OVERLAY_WIDTH, width),
+      height: Math.max(MIN_OVERLAY_HEIGHT, height)
+    });
+  };
+
+  const toggleCollapsed = async () => {
+    if (collapsed) {
+      const restore = expandedSizeRef.current ?? { width: 420, height: 320 };
+      await resizeOverlay(restore.width, restore.height);
+      setCollapsed(false);
+      return;
+    }
+    const bounds = await window.desktopCalApi.window.getBounds();
+    if (bounds) {
+      expandedSizeRef.current = { width: bounds.width, height: bounds.height };
+    }
+    await resizeOverlay(240, 96);
+    setCollapsed(true);
+  };
+
   if (!status?.active) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -49,57 +77,83 @@ export function TimerOverlayApp() {
   }
 
   return (
-    <div className="h-screen p-2">
-      <div className="app-drag flex h-full flex-col rounded-xl border border-slate-700 px-3 py-2 text-slate-100 shadow-lg" style={wrapperStyle}>
-        <div className="text-[11px] text-slate-300">{status.problemName ?? LABELS.fallbackProblem}</div>
-        <div className="mt-1 text-3xl font-semibold tracking-wide">{status.elapsedLabel}</div>
-        <div className="text-xs text-slate-300">
-          {status.overtimeSeconds > 0 ? `${LABELS.overtimePrefix}${status.overtimeLabel}` : `${LABELS.remainingPrefix}${status.remainingLabel}`}
-        </div>
-        <div className="mt-2 h-2 w-full rounded-full bg-slate-700">
-          <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${Math.round(status.progress * 100)}%` }} />
-        </div>
-        <div className="mt-1 text-right text-[11px] text-slate-300">
-          {Math.round(status.progress * 100)}%
-          {status.paused ? LABELS.pausedTag : ""}
-        </div>
-        <div className="app-no-drag mt-2 flex gap-2">
-          {status.paused ? (
+    <div className={collapsed ? "h-screen p-1.5" : "h-screen p-2"}>
+      <div className={`app-drag flex h-full flex-col rounded-xl border border-slate-700 text-slate-100 shadow-lg ${collapsed ? "px-2 py-1.5" : "px-3 py-2"}`} style={wrapperStyle}>
+        {collapsed ? (
+          <div className="app-no-drag flex h-full items-center justify-between gap-2">
+            <div className="text-3xl font-semibold tracking-wide">{status.elapsedLabel}</div>
             <button
-              className="rounded bg-sky-500 px-2 py-1 text-xs font-medium text-white hover:bg-sky-400"
-              onClick={async () => {
-                await window.desktopCalApi.timer.resume();
-              }}
+              type="button"
+              className="rounded border border-slate-500 px-2 py-0.5 text-[11px] text-slate-200 hover:bg-slate-700"
+              onClick={toggleCollapsed}
             >
-              {LABELS.resume}
+              {LABELS.expand}
             </button>
-          ) : (
-            <button
-              className="rounded bg-amber-500 px-2 py-1 text-xs font-medium text-white hover:bg-amber-400"
-              onClick={async () => {
-                await window.desktopCalApi.timer.pause();
-              }}
-            >
-              {LABELS.pause}
-            </button>
-          )}
-          <button
-            className="flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-400"
-            onClick={async () => {
-              await window.desktopCalApi.timer.complete();
-            }}
-          >
-            {LABELS.complete}
-          </button>
-          <button
-            className="rounded border border-slate-500 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
-            onClick={async () => {
-              await window.desktopCalApi.timer.stop();
-            }}
-          >
-            {LABELS.stop}
-          </button>
-        </div>
+          </div>
+        ) : (
+          <>
+            <div className="text-[11px] text-slate-300">{status.problemName ?? LABELS.fallbackProblem}</div>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <div className="text-3xl font-semibold tracking-wide">{status.elapsedLabel}</div>
+              <div className="app-no-drag">
+                <button
+                  type="button"
+                  className="rounded border border-slate-500 px-2 py-0.5 text-[11px] text-slate-200 hover:bg-slate-700"
+                  onClick={toggleCollapsed}
+                >
+                  {LABELS.collapse}
+                </button>
+              </div>
+            </div>
+            <div className="text-xs text-slate-300">
+              {status.overtimeSeconds > 0 ? `${LABELS.overtimePrefix}${status.overtimeLabel}` : `${LABELS.remainingPrefix}${status.remainingLabel}`}
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-slate-700">
+              <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${Math.round(status.progress * 100)}%` }} />
+            </div>
+            <div className="mt-1 text-right text-[11px] text-slate-300">
+              {Math.round(status.progress * 100)}%
+              {status.paused ? LABELS.pausedTag : ""}
+            </div>
+            <div className="app-no-drag mt-2 flex gap-2">
+              {status.paused ? (
+                <button
+                  className="rounded bg-sky-500 px-2 py-1 text-xs font-medium text-white hover:bg-sky-400"
+                  onClick={async () => {
+                    await window.desktopCalApi.timer.resume();
+                  }}
+                >
+                  {LABELS.resume}
+                </button>
+              ) : (
+                <button
+                  className="rounded bg-amber-500 px-2 py-1 text-xs font-medium text-white hover:bg-amber-400"
+                  onClick={async () => {
+                    await window.desktopCalApi.timer.pause();
+                  }}
+                >
+                  {LABELS.pause}
+                </button>
+              )}
+              <button
+                className="flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-400"
+                onClick={async () => {
+                  await window.desktopCalApi.timer.complete();
+                }}
+              >
+                {LABELS.complete}
+              </button>
+              <button
+                className="rounded border border-slate-500 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                onClick={async () => {
+                  await window.desktopCalApi.timer.stop();
+                }}
+              >
+                {LABELS.stop}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
