@@ -289,13 +289,27 @@ function extractOpenClawEnvelope(text: string): OpenClawSignalEnvelope | null {
 
 function pickDefaultCalendarId() {
   const calendars = calendarRepository.listAll() as CalendarRow[];
-  const selected = calendars.find((calendar) => calendar.selected === 1);
-  return selected?.id ?? calendars[0]?.id ?? null;
+  const normalizeTitle = (value: string) => value.trim().toLowerCase().replace(/\s+/g, "").replace(/캘린더$/g, "");
+  const selected = calendars.filter((calendar) => calendar.selected === 1);
+  const selectedPool = selected.length > 0 ? selected : calendars;
+  const preferred = selectedPool.find((calendar) => normalizeTitle(calendar.title).includes("일정"));
+  if (preferred) return preferred.id;
+  return selectedPool[0]?.id ?? null;
 }
 
-function resolveCalendarId(inputCalendarId: string | undefined, parsed: ParsedAiEvent) {
+function resolveCalendarId(inputCalendarId: string | undefined, parsed: ParsedAiEvent, userMessage: string | undefined) {
   const calendars = calendarRepository.listAll() as CalendarRow[];
   const normalizeTitle = (value: string) => value.trim().toLowerCase().replace(/\s+/g, "").replace(/캘린더$/g, "");
+  const findByTitleKeyword = (keyword: string) => {
+    const normalizedKeyword = normalizeTitle(keyword);
+    const selected = calendars.filter((calendar) => calendar.selected === 1);
+    const selectedPool = selected.length > 0 ? selected : calendars;
+    const exact = selectedPool.find((calendar) => normalizeTitle(calendar.title) === normalizedKeyword);
+    if (exact) return exact.id;
+    const contains = selectedPool.find((calendar) => normalizeTitle(calendar.title).includes(normalizedKeyword));
+    if (contains) return contains.id;
+    return null;
+  };
   if (inputCalendarId) {
     return calendars.find((calendar) => calendar.id === inputCalendarId)?.id ?? null;
   }
@@ -324,17 +338,25 @@ function resolveCalendarId(inputCalendarId: string | undefined, parsed: ParsedAi
     if (inferred) return inferred.id;
   }
 
-  if (calendars.length === 1) {
-    return calendars[0].id;
+  const sourceText = `${parsed.title ?? ""} ${parsed.description ?? ""} ${userMessage ?? ""}`.toLowerCase();
+  const employmentKeywords = ["이력서", "자소서", "포트폴리오", "취업", "면접", "채용", "지원", "회사", "인턴"];
+  const studyKeywords = ["시험", "공부", "학습", "강의", "과제", "문제풀이", "토익", "토플", "코테", "코딩테스트"];
+  const scheduleKeywords = ["약속", "일정", "미팅", "회의", "병원", "식사", "모임", "데이트", "방문"];
+
+  if (employmentKeywords.some((keyword) => sourceText.includes(keyword))) {
+    const id = findByTitleKeyword("취업");
+    if (id) return id;
   }
-  const selected = calendars.find((calendar) => calendar.selected === 1);
-  if (selected) {
-    return selected.id;
+  if (studyKeywords.some((keyword) => sourceText.includes(keyword))) {
+    const id = findByTitleKeyword("공부");
+    if (id) return id;
   }
-  if (calendars.length > 0) {
-    return calendars[0].id;
+  if (scheduleKeywords.some((keyword) => sourceText.includes(keyword))) {
+    const id = findByTitleKeyword("일정");
+    if (id) return id;
   }
-  return null;
+
+  return pickDefaultCalendarId();
 }
 
 function createLocalEvent(input: {
@@ -595,6 +617,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
       "- If allDay is true, still return ISO8601 values.",
       "- Infer missing end time as 1 hour after start for timed events.",
       "- Keep title concise.",
+      "- Calendar routing policy: resume/interview/job topics -> 취업 calendar, exam/study topics -> 공부 calendar, appointment/general plan topics -> 일정 calendar.",
       "- Prefer the user-selected calendar context when available.",
       `- User-selected calendarId from app: ${input.calendarId ?? "(none)"}.`,
       `- Available calendars: ${JSON.stringify(availableCalendars)}.`,
@@ -639,7 +662,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
       endsAt = startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
     }
 
-    const resolvedCalendarId = resolveCalendarId(input.calendarId, parsed);
+    const resolvedCalendarId = resolveCalendarId(input.calendarId, parsed, input.message);
     if (!resolvedCalendarId) {
       return { ok: false, error: "Could not resolve target calendar." };
     }
@@ -668,9 +691,15 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     }
 
     const when = created.allDay ? dayjs(created.startsAt).format("M/D 하루 종일") : dayjs(created.startsAt).format("M/D HH:mm");
+    const targetCalendarTitle =
+      availableCalendars.find((calendar) => calendar.id === validated.calendarId)?.title ??
+      (calendarRepository.listAll() as CalendarRow[]).find((calendar) => calendar.id === validated.calendarId)?.title ??
+      "기본 캘린더";
+    const calendarSuffix = ` (캘린더: ${targetCalendarTitle})`;
+    const contentWithCalendar = reply ? `${reply}${calendarSuffix}` : `일정을 등록했어요: ${created.title} (${when})${calendarSuffix}`;
     return {
       ok: true,
-      content: reply || `일정을 등록했어요: ${created.title} (${when})`,
+      content: contentWithCalendar,
       created: {
         eventId: created.id,
         title: created.title,

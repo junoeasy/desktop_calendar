@@ -141,7 +141,13 @@ export function App() {
     };
   }, []);
 
-  const defaultCalendarId = useMemo(() => calendars.find((c) => c.selected === 1)?.id ?? null, [calendars]);
+  const defaultCalendarId = useMemo(() => {
+    const normalizeTitle = (value: string) => value.trim().toLowerCase().replace(/\s+/g, "").replace(/캘린더$/g, "");
+    const selected = calendars.filter((calendar) => calendar.selected === 1);
+    const pool = selected.length > 0 ? selected : calendars;
+    const preferred = pool.find((calendar) => normalizeTitle(calendar.title).includes("일정"));
+    return preferred?.id ?? pool[0]?.id ?? null;
+  }, [calendars]);
   const calendarTitleMap = useMemo(() => new Map(calendars.map((cal) => [cal.id, cal.title])), [calendars]);
   const panelOpacity = Number.isFinite(settings?.windowOpacity) ? Math.min(1, Math.max(0.3, settings?.windowOpacity ?? 1)) : 1;
   const calendarPanelOpacity = Math.max(0.05, panelOpacity * 0.8);
