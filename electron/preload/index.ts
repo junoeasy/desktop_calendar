@@ -45,7 +45,8 @@ const api = {
     resize: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.windowResize, payload)
   },
   openclaw: {
-    chat: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawChat, payload)
+    chat: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawChat, payload),
+    createEvent: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawCreateEvent, payload)
   },
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => {

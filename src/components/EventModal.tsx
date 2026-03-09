@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dayjs from "dayjs";
+import type { CalendarRow } from "@shared/apiTypes";
 
 type EventInput = {
   id?: string;
@@ -16,29 +17,42 @@ type Props = {
   open: boolean;
   date: string;
   defaultCalendarId: string | null;
+  calendars: CalendarRow[];
   editing?: EventInput | null;
   onClose: () => void;
   onSubmit: (payload: EventInput) => Promise<void>;
 };
 
-export function EventModal({ open, date, defaultCalendarId, editing, onClose, onSubmit }: Props) {
+export function EventModal({ open, date, defaultCalendarId, calendars, editing, onClose, onSubmit }: Props) {
   const [title, setTitle] = useState(editing?.title ?? "");
   const [location, setLocation] = useState(editing?.location ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [startTime, setStartTime] = useState(dayjs(editing?.startsAt ?? `${date}T09:00:00`).format("HH:mm"));
   const [endTime, setEndTime] = useState(dayjs(editing?.endsAt ?? `${date}T10:00:00`).format("HH:mm"));
   const [allDay, setAllDay] = useState(editing?.allDay ?? false);
+  const [calendarId, setCalendarId] = useState(editing?.calendarId ?? defaultCalendarId ?? calendars[0]?.id ?? "");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(editing?.title ?? "");
+    setLocation(editing?.location ?? "");
+    setDescription(editing?.description ?? "");
+    setStartTime(dayjs(editing?.startsAt ?? `${date}T09:00:00`).format("HH:mm"));
+    setEndTime(dayjs(editing?.endsAt ?? `${date}T10:00:00`).format("HH:mm"));
+    setAllDay(editing?.allDay ?? false);
+    setCalendarId(editing?.calendarId ?? defaultCalendarId ?? calendars[0]?.id ?? "");
+  }, [open, editing, date, defaultCalendarId, calendars]);
 
   if (!open) return null;
 
   const handleSubmit = async () => {
-    if (!defaultCalendarId || !title.trim()) return;
+    if (!calendarId || !title.trim()) return;
     setSubmitting(true);
     try {
       await onSubmit({
         id: editing?.id,
-        calendarId: defaultCalendarId,
+        calendarId,
         title: title.trim(),
         location: location || null,
         description: description || null,
@@ -64,6 +78,13 @@ export function EventModal({ open, date, defaultCalendarId, editing, onClose, on
             <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
             \uD558\uB8E8 \uC885\uC77C
           </label>
+          <select className="w-full rounded border border-slate-300 px-3 py-2 text-sm" value={calendarId} onChange={(e) => setCalendarId(e.target.value)}>
+            {calendars.map((calendar) => (
+              <option key={calendar.id} value={calendar.id}>
+                {calendar.title}
+              </option>
+            ))}
+          </select>
           {!allDay && (
             <div className="grid grid-cols-2 gap-2">
               <input className="rounded border border-slate-300 px-3 py-2" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />

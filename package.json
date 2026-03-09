@@ -16,7 +16,7 @@
     "dist": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis",
     "lint": "eslint .",
     "test": "vitest run",
-    "start": "electron ."
+    "start": "npm run build:renderer && npm run build:electron && electron ."
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.4",

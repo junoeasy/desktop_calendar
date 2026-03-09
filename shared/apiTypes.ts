@@ -119,5 +119,9 @@ export type DesktopCalBridge = {
   };
   openclaw: {
     chat: (payload: { message: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<{ ok: true; content: string } | { ok: false; error: string }>;
+    createEvent: (payload: { message: string; calendarId?: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<
+      | { ok: true; content: string; created: { eventId: string; title: string; startsAt: string; endsAt: string; allDay: boolean } | null }
+      | { ok: false; error: string }
+    >;
   };
 };

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CalendarRow } from "@shared/apiTypes";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -7,10 +8,27 @@ type ChatMessage = {
 
 type Props = {
   open: boolean;
+  calendars: CalendarRow[];
   onClose: () => void;
 };
 
-export function OpenClawChatModal({ open, onClose }: Props) {
+function toDisplayReply(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) {
+    return text;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as { reply?: unknown };
+    if (typeof parsed.reply === "string" && parsed.reply.trim().length > 0) {
+      return parsed.reply;
+    }
+  } catch {
+    // Keep original text when not JSON.
+  }
+  return text;
+}
+
+export function OpenClawChatModal({ open, calendars, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,7 +61,7 @@ export function OpenClawChatModal({ open, onClose }: Props) {
     setMessages(nextMessages);
     setLoading(true);
 
-    const result = await window.desktopCalApi.openclaw.chat({
+    const result = await window.desktopCalApi.openclaw.createEvent({
       message: text,
       history: messages
     });
@@ -54,9 +72,11 @@ export function OpenClawChatModal({ open, onClose }: Props) {
       return;
     }
 
-    setMessages((prev) => [...prev, { role: "assistant", content: result.content }]);
+    setMessages((prev) => [...prev, { role: "assistant", content: toDisplayReply(result.content) }]);
     setLoading(false);
   };
+
+  const hasCalendars = calendars.length > 0;
 
   return (
     <div
@@ -70,18 +90,18 @@ export function OpenClawChatModal({ open, onClose }: Props) {
     >
       <div className="flex h-[72vh] w-full max-w-[760px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-          <h3 className="text-sm font-semibold text-slate-800">OpenClaw 채팅</h3>
+          <h3 className="text-sm font-semibold text-slate-800">OpenClaw 일정 추가</h3>
           <button className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50" onClick={onClose}>
             닫기
           </button>
         </div>
 
         <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
-          {messages.length === 0 && <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">메시지를 입력하면 OpenClaw 서버와 대화합니다.</div>}
+          {messages.length === 0 && <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">자연어로 입력하면 OpenClaw가 해석합니다. Shift+Enter로 줄바꿈할 수 있습니다.</div>}
           {messages.map((message, index) => (
             <div
               key={`${message.role}-${index}`}
-              className={`max-w-[92%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+              className={`max-w-[92%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
                 message.role === "user" ? "ml-auto bg-slate-900 text-white" : "mr-auto border border-slate-200 bg-slate-50 text-slate-800"
               }`}
             >
@@ -92,11 +112,12 @@ export function OpenClawChatModal({ open, onClose }: Props) {
         </div>
 
         <div className="border-t border-slate-200 px-3 py-2">
+          {!hasCalendars && <div className="mb-2 text-xs text-rose-600">등록할 캘린더가 없습니다. Google 연동을 먼저 완료해 주세요.</div>}
           {error && <div className="mb-2 text-xs text-rose-600">{error}</div>}
-          <div className="flex items-center gap-2">
-            <input
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent"
-              placeholder="메시지를 입력하세요"
+          <div className="flex items-end gap-2">
+            <textarea
+              className="min-h-[76px] w-full resize-y rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent"
+              placeholder="예: 내일 오후 3시에 팀 회의 1시간 추가해줘"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -109,7 +130,7 @@ export function OpenClawChatModal({ open, onClose }: Props) {
             <button
               className="rounded bg-accent px-3 py-2 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => void onSend()}
-              disabled={!canSend}
+              disabled={!canSend || !hasCalendars}
             >
               전송
             </button>
