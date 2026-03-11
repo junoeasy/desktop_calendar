@@ -210,6 +210,10 @@ export async function runSync(forceFull = false) {
   status.running = true;
   status.lastError = null;
   try {
+    if (!getGoogleClient()) {
+      status.lastError = "Google 연결이 끊어져 동기화를 수행할 수 없습니다. 다시 로그인해 주세요.";
+      return status;
+    }
     if (forceFull) {
       syncRepository.clearAllSyncTokens();
     }
