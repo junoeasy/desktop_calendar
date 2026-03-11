@@ -1,11 +1,11 @@
 ﻿import { BrowserWindow, ipcMain } from "electron";
 import dayjs from "dayjs";
-import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, openClawChatSchema, openClawCreateEventSchema, settingsUpdateSchema, syncTriggerSchema, timerStartSchema, windowResizeSchema } from "../../shared/ipc";
+import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, openClawChatSchema, openClawCreateEventSchema, savedTimerActionSchema, settingsUpdateSchema, syncTriggerSchema, timerStartSchema, windowResizeSchema } from "../../shared/ipc";
 import { calendarRepository, eventRepository, settingsRepository, syncRepository, userRepository } from "./repositories";
 import { hasGoogleToken, signInWithGoogle, signOutGoogle } from "./googleAuth";
 import { getSyncStatus, runSync, syncCalendarsFromGoogle } from "./syncEngine";
 import { buildQueuePayload } from "./queueMapper";
-import { completeStudyTimer, getStudyTimerStatus, pauseStudyTimer, resumeStudyTimer, startStudyTimer, stopStudyTimer } from "./studyTimer";
+import { completeStudyTimer, deleteSavedStudyTimer, getStudyTimerStatus, listSavedStudyTimers, pauseStudyTimer, resumeSavedStudyTimer, resumeStudyTimer, saveStudyTimer, startStudyTimer, stopStudyTimer } from "./studyTimer";
 import type { CalendarRow } from "../../shared/apiTypes";
 
 const WINDOW_MIN_WIDTH = 360;
@@ -543,11 +543,29 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     }
     return status;
   });
+  ipcMain.handle(IPC_CHANNELS.timerSave, async () => {
+    const status = saveStudyTimer();
+    options.hideTimerOverlayWindow();
+    return status;
+  });
   ipcMain.handle(IPC_CHANNELS.timerStop, async () => {
     const status = stopStudyTimer();
     options.hideTimerOverlayWindow();
     return status;
   });
+  ipcMain.handle(IPC_CHANNELS.timerResumeSaved, async (_e, payload: unknown) => {
+    const input = savedTimerActionSchema.parse(payload);
+    const status = resumeSavedStudyTimer(input.savedTimerId);
+    if (status.active) {
+      options.showTimerOverlayWindow();
+    }
+    return status;
+  });
+  ipcMain.handle(IPC_CHANNELS.timerDeleteSaved, async (_e, payload: unknown) => {
+    const input = savedTimerActionSchema.parse(payload);
+    return deleteSavedStudyTimer(input.savedTimerId);
+  });
+  ipcMain.handle(IPC_CHANNELS.timerSavedList, async () => listSavedStudyTimers());
   ipcMain.handle(IPC_CHANNELS.timerComplete, async () => {
     const status = completeStudyTimer();
     options.hideTimerOverlayWindow();

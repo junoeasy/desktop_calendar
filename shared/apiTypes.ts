@@ -35,6 +35,26 @@ export type StudyTimerCompletion = {
   message: string;
 };
 
+export type StudySavedTimer = {
+  id: string;
+  problemName: string;
+  durationMinutes: number;
+  elapsedSeconds: number;
+  elapsedLabel: string;
+  savedAt: string;
+};
+
+export type StudyCompletedTimer = {
+  id: string;
+  problemName: string;
+  durationMinutes: number;
+  elapsedSeconds: number;
+  elapsedLabel: string;
+  completedAt: string;
+  savedToCalendar: boolean;
+  eventId: string | null;
+};
+
 export type StudyTimerStatus = {
   active: boolean;
   running: boolean;
@@ -50,6 +70,8 @@ export type StudyTimerStatus = {
   remainingLabel: string;
   overtimeLabel: string;
   lastResult: StudyTimerCompletion | null;
+  savedTimers: StudySavedTimer[];
+  completedTimers: StudyCompletedTimer[];
 };
 
 export type SummaryEvent = {
@@ -102,7 +124,11 @@ export type DesktopCalBridge = {
     start: (payload?: { durationMinutes?: number; problemName?: string }) => Promise<StudyTimerStatus>;
     pause: () => Promise<StudyTimerStatus>;
     resume: () => Promise<StudyTimerStatus>;
+    save: () => Promise<StudyTimerStatus & { saved: StudySavedTimer | null }>;
     stop: () => Promise<StudyTimerStatus>;
+    resumeSaved: (payload: { savedTimerId: string }) => Promise<StudyTimerStatus>;
+    deleteSaved: (payload: { savedTimerId: string }) => Promise<StudyTimerStatus>;
+    savedList: () => Promise<StudySavedTimer[]>;
     complete: () => Promise<StudyTimerStatus & { completed: StudyTimerCompletion | null }>;
     status: () => Promise<StudyTimerStatus>;
   };

@@ -15,6 +15,7 @@ const LABELS = {
   pausedTag: " (\uC77C\uC2DC\uC815\uC9C0)",
   resume: "\uC7AC\uAC1C",
   pause: "\uC77C\uC2DC\uC815\uC9C0",
+  save: "\uC800\uC7A5",
   complete: "\uC644\uB8CC",
   stop: "\uC911\uC9C0",
   collapse: "\uC811\uAE30",
@@ -24,6 +25,7 @@ const LABELS = {
 export function TimerOverlayApp() {
   const [status, setStatus] = useState<StudyTimerStatus | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const expandedSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
@@ -64,6 +66,11 @@ export function TimerOverlayApp() {
     }
     await resizeOverlay(240, 96);
     setCollapsed(true);
+  };
+
+  const confirmStop = async () => {
+    await window.desktopCalApi.timer.stop();
+    setStopConfirmOpen(false);
   };
 
   if (!status?.active) {
@@ -136,6 +143,14 @@ export function TimerOverlayApp() {
                 </button>
               )}
               <button
+                className="rounded bg-violet-500 px-2 py-1 text-xs font-medium text-white hover:bg-violet-400"
+                onClick={async () => {
+                  await window.desktopCalApi.timer.save();
+                }}
+              >
+                {LABELS.save}
+              </button>
+              <button
                 className="flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-400"
                 onClick={async () => {
                   await window.desktopCalApi.timer.complete();
@@ -145,9 +160,7 @@ export function TimerOverlayApp() {
               </button>
               <button
                 className="rounded border border-slate-500 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
-                onClick={async () => {
-                  await window.desktopCalApi.timer.stop();
-                }}
+                onClick={() => setStopConfirmOpen(true)}
               >
                 {LABELS.stop}
               </button>
@@ -155,6 +168,48 @@ export function TimerOverlayApp() {
           </>
         )}
       </div>
+
+      {stopConfirmOpen && (
+        <div
+          className="app-no-drag fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/35 p-3"
+          onMouseDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setStopConfirmOpen(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void confirmStop();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setStopConfirmOpen(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-[380px] rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-slate-100 shadow-xl">
+            <div className="text-sm font-semibold">중단 확인</div>
+            <div className="mt-2 text-xs text-slate-300">중단을 하면 저장이 되지 않습니다. 중단하시겠습니까?</div>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                autoFocus
+                className="rounded bg-rose-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-400"
+                onClick={() => void confirmStop()}
+              >
+                네
+              </button>
+              <button
+                className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                onClick={() => setStopConfirmOpen(false)}
+              >
+                아니요
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

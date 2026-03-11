@@ -32,7 +32,11 @@ const api = {
     start: (payload?: unknown) => ipcRenderer.invoke(IPC_CHANNELS.timerStart, payload ?? {}),
     pause: () => ipcRenderer.invoke(IPC_CHANNELS.timerPause),
     resume: () => ipcRenderer.invoke(IPC_CHANNELS.timerResume),
+    save: () => ipcRenderer.invoke(IPC_CHANNELS.timerSave),
     stop: () => ipcRenderer.invoke(IPC_CHANNELS.timerStop),
+    resumeSaved: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.timerResumeSaved, payload),
+    deleteSaved: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.timerDeleteSaved, payload),
+    savedList: () => ipcRenderer.invoke(IPC_CHANNELS.timerSavedList),
     complete: () => ipcRenderer.invoke(IPC_CHANNELS.timerComplete),
     status: () => ipcRenderer.invoke(IPC_CHANNELS.timerStatus)
   },

@@ -29,6 +29,10 @@ export const timerStartSchema = z.object({
   problemName: z.string().min(1).max(120).optional()
 });
 
+export const savedTimerActionSchema = z.object({
+  savedTimerId: z.string().uuid()
+});
+
 export const settingsUpdateSchema = z.object({
   startupLaunch: z.boolean().optional(),
   minimizeToTray: z.boolean().optional(),
@@ -86,6 +90,7 @@ export type EventDeleteInput = z.infer<typeof eventDeleteSchema>;
 export type MonthQueryInput = z.infer<typeof monthQuerySchema>;
 export type SyncTriggerInput = z.infer<typeof syncTriggerSchema>;
 export type TimerStartInput = z.infer<typeof timerStartSchema>;
+export type SavedTimerActionInput = z.infer<typeof savedTimerActionSchema>;
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
 export type CalendarSelectionInput = z.infer<typeof calendarSelectionSchema>;
 export type CalendarColorInput = z.infer<typeof calendarColorSchema>;
@@ -112,7 +117,11 @@ export const IPC_CHANNELS = {
   timerStart: "timer:start",
   timerPause: "timer:pause",
   timerResume: "timer:resume",
+  timerSave: "timer:save",
   timerStop: "timer:stop",
+  timerResumeSaved: "timer:resume-saved",
+  timerDeleteSaved: "timer:delete-saved",
+  timerSavedList: "timer:saved-list",
   timerComplete: "timer:complete",
   timerStatus: "timer:status",
   summaryGet: "summary:get",
