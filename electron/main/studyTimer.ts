@@ -1,4 +1,4 @@
-import Store from "electron-store";
+﻿import Store from "electron-store";
 import { v4 as uuidv4 } from "uuid";
 import { calendarRepository, eventRepository, syncRepository } from "./repositories";
 import { buildQueuePayload } from "./queueMapper";
@@ -7,7 +7,7 @@ import { runSync } from "./syncEngine";
 const DEFAULT_DURATION_MINUTES = 240;
 const MIN_DURATION_MINUTES = 1;
 const MAX_DURATION_MINUTES = 720;
-const DEFAULT_PROBLEM_NAME = "코테 문제";
+const DEFAULT_PROBLEM_NAME = "肄뷀뀒 臾몄젣";
 
 type SessionState = {
   startedAtIso: string;
@@ -329,11 +329,17 @@ export function completeStudyTimer() {
 
   const completedAt = new Date().toISOString();
   const elapsedSeconds = computeElapsedSeconds(Date.now());
-  const selectedCalendars = calendarRepository.listSelected() as Array<{
+  const allCalendars = calendarRepository.listAll() as Array<{
     id: string;
     provider_calendar_id: string;
+    title: string;
+    selected: number;
   }>;
-  const primary = selectedCalendars[0];
+  const selectedCalendars = allCalendars.filter((calendar) => calendar.selected === 1);
+  const normalizeTitle = (value: string) => value.trim().toLowerCase().replace(/\s+/g, "").replace(/캘린더$/g, "");
+  const preferredSelectedStudy = selectedCalendars.find((calendar) => normalizeTitle(calendar.title).includes("공부"));
+  const preferredAnyStudy = allCalendars.find((calendar) => normalizeTitle(calendar.title).includes("공부"));
+  const primary = preferredSelectedStudy ?? preferredAnyStudy ?? selectedCalendars[0] ?? null;
 
   let savedToCalendar = false;
   let eventId: string | null = null;
@@ -360,7 +366,7 @@ export function completeStudyTimer() {
       void runSync(false);
       savedToCalendar = true;
       eventId = created.id;
-      message = "학습 세션을 캘린더에 저장했습니다.";
+      message = `${primary.title} 캘린더에 학습 세션을 저장했습니다.`;
     }
   } else {
     message = "선택된 캘린더가 없어 학습 세션을 캘린더에 저장하지 못했습니다.";
@@ -390,3 +396,4 @@ export function completeStudyTimer() {
     completed: lastResult
   };
 }
+
