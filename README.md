@@ -1,33 +1,46 @@
-# DesktopCal Sync (Electron + React + TypeScript)
+# DesktopCal Sync
 
-DesktopCal 스타일의 Windows 설치형 캘린더 앱 MVP입니다.  
-로컬 SQLite를 즉시 렌더링 소스로 사용하고, Google Calendar와 양방향 동기화합니다.
-
-## 기술 스택
-
-- Electron (main/preload)
-- React + TypeScript + Vite (renderer)
-- TailwindCSS
-- better-sqlite3 (local-first DB)
-- Zustand
-- React Query
-- Zod
-- dayjs
-- electron-store
-- electron-builder
+Windows 데스크톱 위젯 스타일 캘린더 앱입니다.  
+로컬(SQLite) 우선으로 일정 데이터를 관리하고, Google Calendar와 양방향 동기화합니다.
 
 ## 주요 기능
 
-- 월간 그리드(큰 날짜 셀)
-- 날짜 더블클릭으로 일정 추가
-- 일정 CRUD
-- 날짜 셀 미리보기(+more)
-- Google OAuth2 로그인
-- 선택 캘린더 기준 양방향 동기화
-- sync_queue 기반 재시도(backoff)
-- 시스템 트레이 / 트레이 최소화
-- 시작프로그램 옵션 / 바탕화면 고정 옵션
-- 다크/라이트 + 강조 색상
+- 월간 캘린더 + 날짜별 일정 보기
+- 일정 CRUD (생성/수정/삭제)
+- Google OAuth 로그인 및 양방향 동기화
+- OpenClaw 연동 자연어 일정 등록
+  - `reply + signals(create_event)` 형태 응답 처리
+  - 캘린더 자동 분류(취업/공부/일정) 및 기본 `일정` 우선
+- 코테 타이머
+  - 시작/일시정지/재개/완료/중단
+  - 저장(세션 보관) / 이어하기 / 삭제
+  - 저장 목록 팝업(진행중/완료 탭)
+  - 앱 재시작 후에도 저장 목록 유지
+
+## 기술 스택
+
+- Electron (main / preload)
+- React + TypeScript + Vite
+- Tailwind CSS
+- better-sqlite3
+- React Query / Zustand
+- Zod
+- electron-store
+- electron-builder
+
+## 프로젝트 구조
+
+```text
+electron/
+  main/      # DB, IPC, 동기화, 타이머, 오버레이
+  preload/   # renderer <-> main bridge
+src/
+  app/       # App, TimerOverlayApp
+  components/# UI 컴포넌트
+shared/      # IPC 채널, 공용 타입
+db/
+  migrations/
+```
 
 ## 실행 방법
 
@@ -36,47 +49,74 @@ npm install
 npm run dev
 ```
 
-## 빌드 / 배포
+- `dev`: Vite + Electron 개발 실행 (핫 리로드)
+
+## 빌드/실행
 
 ```bash
 npm run build
+npm run start
+```
+
+- `start`: 최신 renderer/electron 빌드 후 Electron 실행
+
+## 배포(설치파일 생성)
+
+```bash
 npm run dist
 ```
 
-출력물은 `release/`에 생성됩니다.
+생성 경로:
 
-## Google OAuth 설정
+- `release/DesktopCal Sync Setup 1.0.0.exe`
+- `release/win-unpacked/`
 
-1. Google Cloud Console 프로젝트 생성
-2. Google Calendar API 활성화
-3. OAuth 동의 화면 구성
-4. OAuth Client ID 생성: `Desktop app`
-5. `.env` 생성
+## 환경 변수
 
-```bash
-copy .env.example .env
-```
-
-`.env` 예시:
+루트에 `.env` 파일을 생성해 설정합니다.
 
 ```env
+# Google OAuth
 GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_PORT=42813
+
+# OpenClaw
+OPENCLAW_CHAT_URL=http://your-openclaw-endpoint
+OPENCLAW_MODEL=openclaw:main
+OPENCLAW_API_KEY=
 ```
 
-## DB 스키마
+## OpenClaw 응답 계약(권장)
 
-`db/migrations/001_init.sql`
+일정 자동 등록을 안정적으로 사용하려면 OpenClaw 응답을 아래 형식으로 고정하세요.
 
-- users
-- calendars
-- events (soft delete: `deleted_at`)
-- sync_state
-- sync_queue
-- app_settings
+```json
+{
+  "reply": "사용자에게 보여줄 답변",
+  "signals": [
+    {
+      "kind": "create_event",
+      "payload": {
+        "title": "테스트 일정",
+        "startsAt": "2026-03-11T09:00:00+09:00",
+        "endsAt": "2026-03-11T10:00:00+09:00",
+        "allDay": false,
+        "description": null,
+        "location": null,
+        "calendarId": null,
+        "calendarTitle": "일정"
+      }
+    }
+  ]
+}
+```
 
-## 검증 명령
+- 일반 대화: `signals: []`
+- 일정 생성: `signals[].kind === "create_event"`
+- 앱은 `reply`를 표시하고, `signals`를 실행합니다.
+
+## 테스트/검증
 
 ```bash
 npm run lint
@@ -84,16 +124,7 @@ npm run test
 npm run build
 ```
 
-## 알려진 제한사항 (MVP)
+## 참고
 
-- 캘린더 권한 세분화(읽기/쓰기 분리) 미구현
-- Google incremental sync token 만료 처리 단순화
-- 트레이 아이콘은 임시 내장 아이콘
-- 통합 테스트는 mock 기반 최소 검증 수준
-
-## 다음 로드맵
-
-1. Google push 알림(webhook 대체 전략) 반영
-2. 동기화 충돌 UI(수동 선택) 추가
-3. 반복 일정 RRULE 고급 편집
-4. 드래그앤드롭 일정 이동
+- 캘린더가 여러 개면 `calendarId`/`calendarTitle` 우선으로 라우팅합니다.
+- 중단 버튼은 확인 팝업이 뜨며, `네` 선택 시 저장 없이 종료됩니다.
