@@ -105,9 +105,14 @@ export type GoogleTaskItem = {
   completedAt: string | null;
 };
 
+export type AppUpdateCheckResult =
+  | { ok: true; status: "available" | "none"; message: string; version?: string }
+  | { ok: false; status: "unsupported" | "checking" | "error"; message: string };
+
 export type DesktopCalBridge = {
   app: {
     version: () => Promise<string>;
+    checkUpdates: () => Promise<AppUpdateCheckResult>;
   };
   auth: {
     signIn: () => Promise<{ connected: true; user: User; calendars: CalendarRow[] } | { connected: false; error: string }>;

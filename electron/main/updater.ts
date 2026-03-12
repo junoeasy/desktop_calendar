@@ -26,6 +26,8 @@ function loadEnv() {
 
 loadEnv();
 
+let checkingUpdates = false;
+
 export function configureAutoUpdater(mainWindow: BrowserWindow) {
   if (!app.isPackaged) {
     return;
@@ -74,3 +76,48 @@ export function configureAutoUpdater(mainWindow: BrowserWindow) {
   void autoUpdater.checkForUpdatesAndNotify();
 }
 
+export async function checkForUpdatesManually() {
+  if (!app.isPackaged) {
+    return {
+      ok: false as const,
+      status: "unsupported" as const,
+      message: "Packaged app only. Update checks are disabled in dev mode."
+    };
+  }
+
+  if (checkingUpdates) {
+    return {
+      ok: false as const,
+      status: "checking" as const,
+      message: "Update check is already running."
+    };
+  }
+
+  checkingUpdates = true;
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    const nextVersion = result?.updateInfo?.version?.trim();
+    const currentVersion = app.getVersion();
+    if (nextVersion && nextVersion !== currentVersion) {
+      return {
+        ok: true as const,
+        status: "available" as const,
+        version: nextVersion,
+        message: `Update found: v${nextVersion}. Download started.`
+      };
+    }
+    return {
+      ok: true as const,
+      status: "none" as const,
+      message: `You are up to date (v${currentVersion}).`
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: "error" as const,
+      message: error instanceof Error ? error.message : String(error)
+    };
+  } finally {
+    checkingUpdates = false;
+  }
+}

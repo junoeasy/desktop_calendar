@@ -45,7 +45,9 @@ const UI_LABELS = {
   loginGoogle: "Google \uB85C\uADF8\uC778",
   settingsMenuTitle: "\uC124\uC815 \uBA54\uB274",
   menu: "\uBA54\uB274",
-  todayTasks: "\uC624\uB298 \uD560 \uC77C"
+  todayTasks: "\uC624\uB298 \uD560 \uC77C",
+  checkUpdates: "\uC5C5\uB370\uC774\uD2B8 \uD655\uC778",
+  checkingUpdates: "\uD655\uC778 \uC911..."
 } as const;
 const WINDOW_MIN_WIDTH = 856;
 const WINDOW_MIN_HEIGHT = 804;
@@ -112,6 +114,7 @@ export function App() {
   const [editing, setEditing] = useState<EventEntity | null>(null);
   const [calendars, setCalendars] = useState<CalendarRow[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [updateChecking, setUpdateChecking] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(true);
   const [openClawChatOpen, setOpenClawChatOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -267,12 +270,12 @@ export function App() {
       const order = loadTodayTaskOrder();
       const orderIndex = new Map(order.map((key, idx) => [key, idx]));
       const sorted = [...tasks].sort((a, b) => {
+        if (a.status !== b.status) return a.status === "needsAction" ? -1 : 1;
         const ai = orderIndex.get(todayTaskKey(a));
         const bi = orderIndex.get(todayTaskKey(b));
         if (ai !== undefined && bi !== undefined) return ai - bi;
         if (ai !== undefined) return -1;
         if (bi !== undefined) return 1;
-        if (a.status !== b.status) return a.status === "needsAction" ? -1 : 1;
         return a.title.localeCompare(b.title, "ko");
       });
       setTodayTasks(sorted);
@@ -465,6 +468,14 @@ export function App() {
     setMenuOpen(false);
   };
 
+  const handleCheckUpdates = async () => {
+    if (updateChecking) return;
+    setUpdateChecking(true);
+    const result = await window.desktopCalApi.app.checkUpdates();
+    setAuthMessage(result.message);
+    setUpdateChecking(false);
+  };
+
   return (
     <div className="h-screen overflow-hidden p-3" style={appBgStyle}>
       <div className="relative mx-auto flex h-full max-w-[1450px] flex-col gap-2">
@@ -542,6 +553,13 @@ export function App() {
 
               {auth?.connected ? (
                 <div className="mt-2 rounded-xl border border-slate-200 p-2 shadow-sm" style={popupPanelStyle}>
+                  <button
+                    className="mb-2 w-full rounded border border-slate-300 bg-white/95 px-2 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-white disabled:opacity-60"
+                    onClick={() => void handleCheckUpdates()}
+                    disabled={updateChecking}
+                  >
+                    {updateChecking ? UI_LABELS.checkingUpdates : UI_LABELS.checkUpdates}
+                  </button>
                   <button
                     className="w-full rounded border border-slate-300 bg-white/95 px-2 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
                     onClick={() => void handleSignOut()}

@@ -4,7 +4,8 @@ import type { NotificationSummaryPayload } from "../../shared/apiTypes";
 
 const api = {
   app: {
-    version: () => ipcRenderer.invoke(IPC_CHANNELS.appVersion)
+    version: () => ipcRenderer.invoke(IPC_CHANNELS.appVersion),
+    checkUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.appCheckUpdates)
   },
   auth: {
     signIn: () => ipcRenderer.invoke(IPC_CHANNELS.authSignIn),

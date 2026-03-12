@@ -26,6 +26,7 @@ import { buildQueuePayload } from "./queueMapper";
 import { completeStudyTimer, deleteSavedStudyTimer, getStudyTimerStatus, listSavedStudyTimers, pauseStudyTimer, resumeSavedStudyTimer, resumeStudyTimer, saveStudyTimer, startStudyTimer, stopStudyTimer } from "./studyTimer";
 import type { CalendarRow } from "../../shared/apiTypes";
 import { completeGoogleTask, createGoogleTask, deleteGoogleTask, listGoogleTasksByDate, listTodayGoogleTasks } from "./googleTasks";
+import { checkForUpdatesManually } from "./updater";
 
 const WINDOW_MIN_WIDTH = 856;
 const WINDOW_MIN_HEIGHT = 804;
@@ -416,6 +417,7 @@ type RegisterIpcOptions = {
 
 export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptions) {
   ipcMain.handle(IPC_CHANNELS.appVersion, async () => app.getVersion());
+  ipcMain.handle(IPC_CHANNELS.appCheckUpdates, async () => checkForUpdatesManually());
 
   ipcMain.handle(IPC_CHANNELS.authSignIn, async () => {
     try {
