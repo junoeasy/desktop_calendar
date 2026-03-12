@@ -3,6 +3,9 @@ import { IPC_CHANNELS, NOTIFICATION_EVENTS } from "../../shared/ipc";
 import type { NotificationSummaryPayload } from "../../shared/apiTypes";
 
 const api = {
+  app: {
+    version: () => ipcRenderer.invoke(IPC_CHANNELS.appVersion)
+  },
   auth: {
     signIn: () => ipcRenderer.invoke(IPC_CHANNELS.authSignIn),
     signOut: () => ipcRenderer.invoke(IPC_CHANNELS.authSignOut),

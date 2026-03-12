@@ -106,6 +106,9 @@ export type GoogleTaskItem = {
 };
 
 export type DesktopCalBridge = {
+  app: {
+    version: () => Promise<string>;
+  };
   auth: {
     signIn: () => Promise<{ connected: true; user: User; calendars: CalendarRow[] } | { connected: false; error: string }>;
     signOut: () => Promise<{ connected: false }>;

@@ -124,6 +124,7 @@ export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
 export type TaskDeleteInput = z.infer<typeof taskDeleteSchema>;
 
 export const IPC_CHANNELS = {
+  appVersion: "app:version",
   authSignIn: "auth:sign-in",
   authSignOut: "auth:sign-out",
   authStatus: "auth:status",

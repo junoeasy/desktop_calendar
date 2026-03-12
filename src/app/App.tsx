@@ -84,6 +84,7 @@ function reorderListByIndex<T>(list: T[], fromIndex: number, toIndex: number) {
 }
 
 export function App() {
+  const [appVersion, setAppVersion] = useState("");
   const [auth, setAuth] = useState<{ connected: boolean; user?: { email: string } | null } | null>(null);
   const [authMessage, setAuthMessage] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -138,11 +139,13 @@ export function App() {
 
   useEffect(() => {
     void (async () => {
-      const [status, calList, sync] = await Promise.all([
+      const [version, status, calList, sync] = await Promise.all([
+        window.desktopCalApi.app.version(),
         window.desktopCalApi.auth.status(),
         window.desktopCalApi.calendars.list(),
         window.desktopCalApi.sync.status()
       ]);
+      setAppVersion(version);
       setAuth(status);
       setCalendars(calList);
       setSyncStatus(sync);
@@ -585,6 +588,10 @@ export function App() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div className="mt-2 px-1 pb-1 text-right text-[11px] text-slate-500">
+                버전 {appVersion || "-"}
               </div>
             </div>
           )}

@@ -1,4 +1,4 @@
-﻿import { BrowserWindow, ipcMain } from "electron";
+﻿import { app, BrowserWindow, ipcMain } from "electron";
 import dayjs from "dayjs";
 import {
   IPC_CHANNELS,
@@ -415,6 +415,8 @@ type RegisterIpcOptions = {
 };
 
 export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptions) {
+  ipcMain.handle(IPC_CHANNELS.appVersion, async () => app.getVersion());
+
   ipcMain.handle(IPC_CHANNELS.authSignIn, async () => {
     try {
       const result = await signInWithGoogle();
@@ -771,4 +773,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     return deleteGoogleTask(input.taskListId, input.taskId);
   });
 }
+
+
+
 
