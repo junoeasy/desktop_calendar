@@ -330,14 +330,37 @@ export const syncRepository = {
       .run(uuidv4(), item.action, item.entityType, item.entityId, item.payloadJson, ts, ts, ts);
   },
   listReady(limit = 50) {
-    return getDb()
+    const rows = getDb()
       .prepare(
         `SELECT * FROM sync_queue
          WHERE next_retry_at <= ?
          ORDER BY created_at ASC
          LIMIT ?`
       )
-      .all(nowIso(), limit) as SyncQueueItem[];
+      .all(nowIso(), limit) as Array<{
+      id: string;
+      action: "create" | "update" | "delete";
+      entity_type: "event";
+      entity_id: string;
+      payload_json: string;
+      attempts: number;
+      next_retry_at: string;
+      last_error: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      payloadJson: row.payload_json,
+      attempts: row.attempts,
+      nextRetryAt: row.next_retry_at,
+      lastError: row.last_error,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
   },
   markSuccess(id: string) {
     getDb().prepare("DELETE FROM sync_queue WHERE id = ?").run(id);
