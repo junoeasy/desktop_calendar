@@ -10,6 +10,7 @@ import { closeDb } from "./db";
 import { runSync } from "./syncEngine";
 import { eventRepository, settingsRepository } from "./repositories";
 import { hideTimerOverlayWindow, showTimerOverlayWindow } from "./timerOverlay";
+import { configureAutoUpdater } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 let syncTimer: NodeJS.Timeout | null = null;
@@ -178,6 +179,7 @@ async function bootstrap() {
   configureSyncTimer();
   configureRealtimeSyncTimer();
   configureReminderTimer();
+  configureAutoUpdater(mainWindow);
 
   await runSync(false);
   sendWeeklyDigestNotification();

@@ -128,3 +128,20 @@ npm run build
 
 - 캘린더가 여러 개면 `calendarId`/`calendarTitle` 우선으로 라우팅합니다.
 - 중단 버튼은 확인 팝업이 뜨며, `네` 선택 시 저장 없이 종료됩니다.
+
+## Auto Update (electron-updater)
+
+- Set AUTO_UPDATE_URL in .env to your update server URL (generic provider).
+- Build and publish artifacts (.exe, latest.yml) to that URL path.
+- Packaged app checks updates on startup and shows:
+  - update available notice
+  - install now / later dialog after download
+
+
+### GitHub Releases publish
+
+- This repo is configured to publish updates to GitHub Releases: junoeasy/desktop_calendar.
+- Set GH_TOKEN in .env (GitHub personal access token with epo scope).
+- Run 
+pm run dist:publish to upload installer artifacts and latest.yml.
+
