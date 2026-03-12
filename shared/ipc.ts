@@ -85,6 +85,27 @@ export const openClawCreateEventSchema = z.object({
     .optional()
 });
 
+export const tasksByDateSchema = z.object({
+  dateIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+});
+
+export const taskCompleteSchema = z.object({
+  taskListId: z.string().min(1),
+  taskId: z.string().min(1),
+  completed: z.boolean().optional()
+});
+
+export const taskCreateSchema = z.object({
+  title: z.string().min(1).max(300),
+  dateIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  taskListId: z.string().min(1).optional()
+});
+
+export const taskDeleteSchema = z.object({
+  taskListId: z.string().min(1),
+  taskId: z.string().min(1)
+});
+
 export type EventUpsertInput = z.infer<typeof eventUpsertSchema>;
 export type EventDeleteInput = z.infer<typeof eventDeleteSchema>;
 export type MonthQueryInput = z.infer<typeof monthQuerySchema>;
@@ -97,6 +118,10 @@ export type CalendarColorInput = z.infer<typeof calendarColorSchema>;
 export type WindowResizeInput = z.infer<typeof windowResizeSchema>;
 export type OpenClawChatInput = z.infer<typeof openClawChatSchema>;
 export type OpenClawCreateEventInput = z.infer<typeof openClawCreateEventSchema>;
+export type TasksByDateInput = z.infer<typeof tasksByDateSchema>;
+export type TaskCompleteInput = z.infer<typeof taskCompleteSchema>;
+export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
+export type TaskDeleteInput = z.infer<typeof taskDeleteSchema>;
 
 export const IPC_CHANNELS = {
   authSignIn: "auth:sign-in",
@@ -130,6 +155,11 @@ export const IPC_CHANNELS = {
   windowResize: "window:resize",
   openClawChat: "openclaw:chat",
   openClawCreateEvent: "openclaw:event-create",
+  tasksByDate: "tasks:by-date",
+  tasksToday: "tasks:today",
+  taskComplete: "tasks:complete",
+  taskCreate: "tasks:create",
+  taskDelete: "tasks:delete",
   setTrayMinimize: "window:tray-minimize"
 } as const;
 

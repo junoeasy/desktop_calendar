@@ -94,6 +94,17 @@ export type WindowBounds = {
   height: number;
 };
 
+export type GoogleTaskItem = {
+  id: string;
+  taskListId: string;
+  taskListTitle: string;
+  title: string;
+  notes: string | null;
+  due: string | null;
+  status: "needsAction" | "completed";
+  completedAt: string | null;
+};
+
 export type DesktopCalBridge = {
   auth: {
     signIn: () => Promise<{ connected: true; user: User; calendars: CalendarRow[] } | { connected: false; error: string }>;
@@ -149,5 +160,12 @@ export type DesktopCalBridge = {
       | { ok: true; content: string; created: { eventId: string; title: string; startsAt: string; endsAt: string; allDay: boolean } | null }
       | { ok: false; error: string }
     >;
+  };
+  tasks: {
+    byDate: (payload: { dateIso: string }) => Promise<GoogleTaskItem[]>;
+    today: () => Promise<GoogleTaskItem[]>;
+    complete: (payload: { taskListId: string; taskId: string; completed?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
+    create: (payload: { title: string; dateIso: string; taskListId?: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
+    delete: (payload: { taskListId: string; taskId: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
   };
 };

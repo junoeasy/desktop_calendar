@@ -52,6 +52,13 @@ const api = {
     chat: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawChat, payload),
     createEvent: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawCreateEvent, payload)
   },
+  tasks: {
+    byDate: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.tasksByDate, payload),
+    today: () => ipcRenderer.invoke(IPC_CHANNELS.tasksToday),
+    complete: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.taskComplete, payload),
+    create: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.taskCreate, payload),
+    delete: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.taskDelete, payload)
+  },
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, payload: NotificationSummaryPayload) => callback(payload);

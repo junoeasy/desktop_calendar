@@ -16,8 +16,8 @@ let syncTimer: NodeJS.Timeout | null = null;
 let realtimeSyncTimer: NodeJS.Timeout | null = null;
 let reminderTimer: NodeJS.Timeout | null = null;
 let isQuitting = false;
-const WINDOW_MIN_WIDTH = 360;
-const WINDOW_MIN_HEIGHT = 280;
+const WINDOW_MIN_WIDTH = 856;
+const WINDOW_MIN_HEIGHT = 804;
 const WINDOW_MAX_WIDTH = 10000;
 const WINDOW_MAX_HEIGHT = 10000;
 

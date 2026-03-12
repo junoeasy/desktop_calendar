@@ -1,15 +1,34 @@
 ﻿import { BrowserWindow, ipcMain } from "electron";
 import dayjs from "dayjs";
-import { IPC_CHANNELS, calendarColorSchema, calendarSelectionSchema, eventDeleteSchema, eventUpsertSchema, monthQuerySchema, openClawChatSchema, openClawCreateEventSchema, savedTimerActionSchema, settingsUpdateSchema, syncTriggerSchema, timerStartSchema, windowResizeSchema } from "../../shared/ipc";
+import {
+  IPC_CHANNELS,
+  calendarColorSchema,
+  calendarSelectionSchema,
+  eventDeleteSchema,
+  eventUpsertSchema,
+  monthQuerySchema,
+  openClawChatSchema,
+  openClawCreateEventSchema,
+  savedTimerActionSchema,
+  settingsUpdateSchema,
+  syncTriggerSchema,
+  taskCompleteSchema,
+  taskCreateSchema,
+  taskDeleteSchema,
+  tasksByDateSchema,
+  timerStartSchema,
+  windowResizeSchema
+} from "../../shared/ipc";
 import { calendarRepository, eventRepository, settingsRepository, syncRepository, userRepository } from "./repositories";
 import { hasGoogleToken, signInWithGoogle, signOutGoogle } from "./googleAuth";
 import { getSyncStatus, runSync, syncCalendarsFromGoogle } from "./syncEngine";
 import { buildQueuePayload } from "./queueMapper";
 import { completeStudyTimer, deleteSavedStudyTimer, getStudyTimerStatus, listSavedStudyTimers, pauseStudyTimer, resumeSavedStudyTimer, resumeStudyTimer, saveStudyTimer, startStudyTimer, stopStudyTimer } from "./studyTimer";
 import type { CalendarRow } from "../../shared/apiTypes";
+import { completeGoogleTask, createGoogleTask, deleteGoogleTask, listGoogleTasksByDate, listTodayGoogleTasks } from "./googleTasks";
 
-const WINDOW_MIN_WIDTH = 360;
-const WINDOW_MIN_HEIGHT = 280;
+const WINDOW_MIN_WIDTH = 856;
+const WINDOW_MIN_HEIGHT = 804;
 const WINDOW_MAX_WIDTH = 10000;
 const WINDOW_MAX_HEIGHT = 10000;
 
@@ -726,6 +745,30 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
         allDay: Boolean(created.allDay)
       }
     };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.tasksByDate, async (_event, payload: unknown) => {
+    const input = tasksByDateSchema.parse(payload);
+    return listGoogleTasksByDate(input.dateIso);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.tasksToday, async () => {
+    return listTodayGoogleTasks();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.taskComplete, async (_event, payload: unknown) => {
+    const input = taskCompleteSchema.parse(payload);
+    return completeGoogleTask(input.taskListId, input.taskId, input.completed ?? true);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.taskCreate, async (_event, payload: unknown) => {
+    const input = taskCreateSchema.parse(payload);
+    return createGoogleTask(input);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.taskDelete, async (_event, payload: unknown) => {
+    const input = taskDeleteSchema.parse(payload);
+    return deleteGoogleTask(input.taskListId, input.taskId);
   });
 }
 
