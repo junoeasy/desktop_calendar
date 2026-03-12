@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { StudyCompletedTimer, StudySavedTimer, StudyTimerCompletion, StudyTimerStatus } from "@shared/apiTypes";
+import type { StudyCompletedTimer, StudySavedTimer, StudyTimerStatus } from "@shared/apiTypes";
 
 const DEFAULT_DURATION_MINUTES = 240;
 const LABELS = {
@@ -36,11 +36,6 @@ function formatPercent(progress: number) {
   return `${Math.round(progress * 100)}%`;
 }
 
-function CompletionMessage({ result }: { result: StudyTimerCompletion | null }) {
-  if (!result) return null;
-  return <span className="ml-2 truncate text-[11px] text-slate-500">{result.message}</span>;
-}
-
 export function StudyTimerControls() {
   const [status, setStatus] = useState<StudyTimerStatus | null>(null);
   const [problemName, setProblemName] = useState(LABELS.defaultProblem);
@@ -74,11 +69,13 @@ export function StudyTimerControls() {
     : LABELS.compactWaiting;
   const savedTimers = status?.savedTimers ?? [];
   const completedTimers = status?.completedTimers ?? [];
+  const infoMessage = message || status?.lastResult?.message || "";
 
   const resumeSaved = async (savedTimerId: string) => {
     const next = await window.desktopCalApi.timer.resumeSaved({ savedTimerId });
     setStatus(next);
     setMessage(LABELS.resumedMessage);
+    setCollapsed(true);
     setSavedModalOpen(false);
   };
 
@@ -97,10 +94,10 @@ export function StudyTimerControls() {
 
   return (
     <>
-      <div className="app-no-drag flex items-start gap-1.5">
+      <div className="flex items-start gap-1.5">
         <button
           type="button"
-          className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
+          className="app-no-drag rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
           onClick={() => setCollapsed((prev) => !prev)}
         >
           {collapsed ? LABELS.expand : LABELS.collapse}
@@ -115,7 +112,7 @@ export function StudyTimerControls() {
         </span>
 
         <button
-          className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
+          className="app-no-drag rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
           onClick={() => {
             setSavedTab("active");
             setSavedModalOpen(true);
@@ -127,17 +124,18 @@ export function StudyTimerControls() {
         {!collapsed && !status?.active ? (
           <>
             <input
-              className="w-36 rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs text-slate-800 shadow-sm"
+              className="app-no-drag w-36 rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs text-slate-800 shadow-sm"
               value={problemName}
               onChange={(e) => setProblemName(e.target.value)}
               placeholder={LABELS.problemPlaceholder}
             />
             <button
-              className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
+              className="app-no-drag rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
               onClick={async () => {
                 const next = await window.desktopCalApi.timer.start({ durationMinutes: DEFAULT_DURATION_MINUTES, problemName });
                 setStatus(next);
                 setMessage(LABELS.startedMessage);
+                setCollapsed(true);
               }}
             >
               {LABELS.start}
@@ -147,7 +145,7 @@ export function StudyTimerControls() {
           <>
             {status?.paused ? (
               <button
-                className="rounded border border-sky-400 bg-white/95 px-2 py-1 text-xs font-medium text-sky-700 shadow-sm hover:bg-sky-50"
+                className="app-no-drag rounded border border-sky-400 bg-white/95 px-2 py-1 text-xs font-medium text-sky-700 shadow-sm hover:bg-sky-50"
                 onClick={async () => {
                   const next = await window.desktopCalApi.timer.resume();
                   setStatus(next);
@@ -158,7 +156,7 @@ export function StudyTimerControls() {
               </button>
             ) : (
               <button
-                className="rounded border border-amber-400 bg-white/95 px-2 py-1 text-xs font-medium text-amber-700 shadow-sm hover:bg-amber-50"
+                className="app-no-drag rounded border border-amber-400 bg-white/95 px-2 py-1 text-xs font-medium text-amber-700 shadow-sm hover:bg-amber-50"
                 onClick={async () => {
                   const next = await window.desktopCalApi.timer.pause();
                   setStatus(next);
@@ -169,7 +167,7 @@ export function StudyTimerControls() {
               </button>
             )}
             <button
-              className="rounded border border-violet-400 bg-white/95 px-2 py-1 text-xs font-medium text-violet-700 shadow-sm hover:bg-violet-50"
+              className="app-no-drag rounded border border-violet-400 bg-white/95 px-2 py-1 text-xs font-medium text-violet-700 shadow-sm hover:bg-violet-50"
               onClick={async () => {
                 const next = await window.desktopCalApi.timer.save();
                 setStatus(next);
@@ -179,7 +177,7 @@ export function StudyTimerControls() {
               {LABELS.save}
             </button>
             <button
-              className="rounded border border-emerald-400 bg-white/95 px-2 py-1 text-xs font-medium text-emerald-700 shadow-sm hover:bg-emerald-50"
+              className="app-no-drag rounded border border-emerald-400 bg-white/95 px-2 py-1 text-xs font-medium text-emerald-700 shadow-sm hover:bg-emerald-50"
               onClick={async () => {
                 const next = await window.desktopCalApi.timer.complete();
                 setStatus(next);
@@ -189,7 +187,7 @@ export function StudyTimerControls() {
               {LABELS.complete}
             </button>
             <button
-              className="rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
+              className="app-no-drag rounded border border-slate-300 bg-white/95 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm hover:bg-white"
               onClick={() => setStopConfirmOpen(true)}
             >
               {LABELS.stop}
@@ -197,15 +195,8 @@ export function StudyTimerControls() {
           </>
         ) : null}
 
-        {!collapsed ? (
-          <>
-            <span className="max-w-[220px] truncate pt-1 text-[11px] text-slate-500">{message}</span>
-            <CompletionMessage result={status?.lastResult ?? null} />
-          </>
-        ) : null}
-
-        {collapsed && message ? <span className="max-w-[180px] truncate pt-1 text-[11px] text-slate-500">{message}</span> : null}
-        {collapsed && status?.lastResult ? <span className="max-w-[180px] truncate pt-1 text-[11px] text-slate-500">{status.lastResult.message}</span> : null}
+        {!collapsed && infoMessage ? <span className="max-w-[220px] truncate pt-1 text-[11px] text-slate-500">{infoMessage}</span> : null}
+        {collapsed && infoMessage ? <span className="max-w-[180px] truncate pt-1 text-[11px] text-slate-500">{infoMessage}</span> : null}
       </div>
 
       {savedModalOpen && (

@@ -34,6 +34,7 @@ export function OpenClawChatModal({ open, calendars, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -46,6 +47,18 @@ export function OpenClawChatModal({ open, calendars, onClose }: Props) {
     if (!target) return;
     target.scrollTop = target.scrollHeight;
   }, [messages, open, loading]);
+
+  useEffect(() => {
+    if (!open) return;
+    const timerId = window.setTimeout(() => {
+      const target = inputRef.current;
+      if (!target) return;
+      target.focus();
+      const end = target.value.length;
+      target.setSelectionRange(end, end);
+    }, 0);
+    return () => window.clearTimeout(timerId);
+  }, [open]);
 
   const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
 
@@ -116,6 +129,7 @@ export function OpenClawChatModal({ open, calendars, onClose }: Props) {
           {error && <div className="mb-2 text-xs text-rose-600">{error}</div>}
           <div className="flex items-end gap-2">
             <textarea
+              ref={inputRef}
               className="min-h-[76px] w-full resize-y rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent"
               placeholder="예: 내일 오후 3시에 팀 회의 1시간 추가해줘"
               value={input}

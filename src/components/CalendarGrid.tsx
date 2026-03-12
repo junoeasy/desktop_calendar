@@ -38,7 +38,10 @@ export function CalendarGrid({ previews, onClickDate, onDoubleClickDate, panelOp
   }, []);
 
   return (
-    <div className="grid h-full grid-cols-7 gap-1.5 rounded-xl border border-slate-200 p-2 shadow-sm" style={{ backgroundColor: `rgba(255, 255, 255, ${panelOpacity})` }}>
+    <div
+      className="grid h-full grid-cols-7 grid-rows-[auto_repeat(6,minmax(0,1fr))] gap-1.5 rounded-xl border border-slate-200 p-2 shadow-sm"
+      style={{ backgroundColor: `rgba(255, 255, 255, ${panelOpacity})` }}
+    >
       {["일", "월", "화", "수", "목", "금", "토"].map((weekday) => (
         <div key={weekday} className="px-1 py-1 text-center text-[11px] font-semibold text-slate-500">
           {weekday}
@@ -73,7 +76,7 @@ export function CalendarGrid({ previews, onClickDate, onDoubleClickDate, panelOp
               onDoubleClickDate(iso);
             }}
             className={clsx(
-              "flex min-h-24 flex-col items-start justify-start rounded-md border p-1.5 text-left transition",
+              "flex min-h-0 flex-col items-start justify-start rounded-md border p-1.5 text-left transition",
               isCurrentMonth ? "border-slate-200" : "border-slate-100 text-slate-400",
               isToday && !isSelected ? "border-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.5)]" : "",
               isSelected ? "ring-2 ring-accent" : "hover:border-accent/60"
