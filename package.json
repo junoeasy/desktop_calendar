@@ -69,14 +69,9 @@
       "dist-renderer/**/*",
       "dist-electron/**/*",
       "assets/**/*",
+      "config/**/*",
       "db/migrations/**/*",
       "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": ".env",
-        "to": ".env"
-      }
     ],
     "asar": true,
     "win": {

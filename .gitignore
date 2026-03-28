@@ -6,3 +6,4 @@ coverage
 .env
 *.log
 desktopcal-sync.db
+config/app.public.json

@@ -10,11 +10,6 @@ function loadEnv() {
   envPaths.add(path.join(process.env.APPDATA ?? "", "desktopcal-sync", ".env"));
   envPaths.add(path.join(process.env.APPDATA ?? "", "DesktopCal Sync", ".env"));
   try {
-    envPaths.add(path.join(process.resourcesPath, ".env"));
-  } catch {
-    // ignore
-  }
-  try {
     envPaths.add(path.join(app.getPath("userData"), ".env"));
   } catch {
     // ignore

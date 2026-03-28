@@ -48,6 +48,7 @@ export function EventModal({ open, date, defaultCalendarId, calendars, editing, 
 
   const handleSubmit = async () => {
     if (!calendarId || !title.trim()) return;
+    if (!allDay && startTime >= endTime) return;
     setSubmitting(true);
     try {
       await onSubmit({
@@ -56,8 +57,9 @@ export function EventModal({ open, date, defaultCalendarId, calendars, editing, 
         title: title.trim(),
         location: location || null,
         description: description || null,
-        startsAt: allDay ? `${date}T00:00:00.000Z` : dayjs(`${date}T${startTime}`).toISOString(),
-        endsAt: allDay ? `${date}T23:59:59.999Z` : dayjs(`${date}T${endTime}`).toISOString(),
+        // 종일 이벤트는 KST(UTC+9) 기준 하루 전체를 UTC로 변환하여 저장
+        startsAt: allDay ? new Date(`${date}T00:00:00.000+09:00`).toISOString() : dayjs(`${date}T${startTime}`).toISOString(),
+        endsAt: allDay ? new Date(`${date}T23:59:59.999+09:00`).toISOString() : dayjs(`${date}T${endTime}`).toISOString(),
         allDay
       });
       onClose();

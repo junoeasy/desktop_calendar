@@ -1,38 +1,12 @@
 ﻿import http from "node:http";
-import path from "node:path";
-import { URL } from "node:url";
 import { exec } from "node:child_process";
-import { app } from "electron";
+import { createHash, randomBytes } from "node:crypto";
+import { URL } from "node:url";
 import { shell } from "electron";
 import Store from "electron-store";
 import { google } from "googleapis";
-import dotenv from "dotenv";
-
-function loadEnv() {
-  const envPaths = new Set<string>();
-  envPaths.add(path.join(process.cwd(), ".env"));
-  envPaths.add(path.join(path.dirname(process.execPath), ".env"));
-  envPaths.add(path.join(process.env.APPDATA ?? "", "desktopcal-sync", ".env"));
-  envPaths.add(path.join(process.env.APPDATA ?? "", "DesktopCal Sync", ".env"));
-
-  try {
-    envPaths.add(path.join(process.resourcesPath, ".env"));
-  } catch {
-    // Ignore unavailable process.resourcesPath.
-  }
-
-  try {
-    envPaths.add(path.join(app.getPath("userData"), ".env"));
-  } catch {
-    // Ignore unavailable userData path.
-  }
-
-  for (const envPath of envPaths) {
-    dotenv.config({ path: envPath, override: false });
-  }
-}
-
-loadEnv();
+import { CodeChallengeMethod } from "google-auth-library";
+import { loadPublicAppConfig } from "./appConfig";
 
 type TokenStore = {
   get: (key: "googleTokens") => Record<string, unknown> | undefined;
@@ -49,23 +23,29 @@ const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.profile"
 ];
 
-function env(name: "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "GOOGLE_REDIRECT_PORT") {
-  const value = process.env[name];
-  if (!value && name !== "GOOGLE_REDIRECT_PORT") {
-    let userEnvPath = "AppData/Roaming/DesktopCal Sync/.env";
-    try {
-      userEnvPath = path.join(app.getPath("userData"), ".env");
-    } catch {
-      // Keep fallback display path.
-    }
-    throw new Error(`${name} is required (.env path: ${userEnvPath})`);
+function getGoogleConfig() {
+  const config = loadPublicAppConfig();
+  const clientId = config.googleClientId.trim();
+  if (!clientId || clientId.startsWith("YOUR_GOOGLE_DESKTOP_CLIENT_ID")) {
+    throw new Error("googleClientId is not configured. Update config/app.public.json");
   }
-  return value ?? "42813";
+  const clientSecret = (config.googleClientSecret ?? "").trim();
+  if (!clientSecret || clientSecret === "SET_DESKTOP_CLIENT_SECRET_HERE") {
+    throw new Error("googleClientSecret is not configured. Update config/app.public.json");
+  }
+
+  const redirectPort = Number(config.googleRedirectPort ?? 42813);
+  if (!Number.isFinite(redirectPort) || redirectPort <= 0) {
+    throw new Error("googleRedirectPort must be a positive number in config/app.public.json");
+  }
+
+  return { clientId, clientSecret, redirectPort };
 }
 
 function createClient() {
-  const redirect = `http://127.0.0.1:${env("GOOGLE_REDIRECT_PORT")}/oauth2callback`;
-  const client = new google.auth.OAuth2(env("GOOGLE_CLIENT_ID"), env("GOOGLE_CLIENT_SECRET"), redirect);
+  const { clientId, clientSecret, redirectPort } = getGoogleConfig();
+  const redirect = `http://127.0.0.1:${redirectPort}/oauth2callback`;
+  const client = new google.auth.OAuth2(clientId, clientSecret, redirect);
   const tokens = tokenStore.get("googleTokens");
   if (tokens) {
     client.setCredentials(tokens);
@@ -75,6 +55,16 @@ function createClient() {
     tokenStore.set("googleTokens", { ...prev, ...tokens });
   });
   return client;
+}
+
+function toBase64Url(buffer: Buffer) {
+  return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function generatePkcePair() {
+  const codeVerifier = toBase64Url(randomBytes(64));
+  const codeChallenge = toBase64Url(createHash("sha256").update(codeVerifier).digest());
+  return { codeVerifier, codeChallenge };
 }
 
 function waitForCode(port: number) {
@@ -115,7 +105,7 @@ function openExternalWithFallback(url: string) {
       .catch(() => {
         exec(`start "" "${url.replace(/"/g, '\\"')}"`, { shell: "cmd.exe" }, (error) => {
           if (error) {
-            reject(new Error("\uBE0C\uB77C\uC6B0\uC800\uB97C \uC5F4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uAE30\uBCF8 \uBE0C\uB77C\uC6B0\uC800 \uC124\uC815\uC744 \uD655\uC778\uD574\uC8FC\uC138\uC694."));
+            reject(new Error("Could not open browser. Check your default browser settings."));
             return;
           }
           resolve();
@@ -124,18 +114,31 @@ function openExternalWithFallback(url: string) {
   });
 }
 
+let cachedGoogleClient: ReturnType<typeof createClient> | null = null;
+
 export async function signInWithGoogle() {
-  const port = Number(env("GOOGLE_REDIRECT_PORT"));
+  cachedGoogleClient = null;
+  const { redirectPort: port } = getGoogleConfig();
   const client = createClient();
+  const { codeVerifier, codeChallenge } = generatePkcePair();
+
   const authUrl = client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: SCOPES
+    scope: SCOPES,
+    code_challenge_method: CodeChallengeMethod.S256,
+    code_challenge: codeChallenge
   });
+
   const codePromise = waitForCode(port);
   await openExternalWithFallback(authUrl);
   const code = await codePromise;
-  const { tokens } = await client.getToken(code);
+
+  const { tokens } = await client.getToken({
+    code,
+    codeVerifier
+  });
+
   tokenStore.set("googleTokens", tokens as unknown as Record<string, unknown>);
   client.setCredentials(tokens);
 
@@ -152,20 +155,23 @@ export async function signInWithGoogle() {
 }
 
 export function signOutGoogle() {
+  cachedGoogleClient = null;
   tokenStore.delete("googleTokens");
   return { connected: false };
 }
 
 export function getGoogleClient() {
-  const client = createClient();
   const tokens = tokenStore.get("googleTokens");
   if (!tokens) {
+    cachedGoogleClient = null;
     return null;
   }
-  return client;
+  if (!cachedGoogleClient) {
+    cachedGoogleClient = createClient();
+  }
+  return cachedGoogleClient;
 }
 
 export function hasGoogleToken() {
   return Boolean(tokenStore.get("googleTokens"));
 }
-

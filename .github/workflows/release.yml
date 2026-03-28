@@ -25,18 +25,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prepare .env for build
+      - name: Create app config from secrets
         shell: pwsh
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         run: |
-          if (Test-Path ".env") {
-            Write-Host ".env already exists."
-          } elseif (Test-Path ".env.example") {
-            Copy-Item ".env.example" ".env"
-            Write-Host "Copied .env.example -> .env"
-          } else {
-            New-Item -ItemType File -Path ".env" | Out-Null
-            Write-Host "Created empty .env"
-          }
+          $config = @{
+            googleClientId = $env:GOOGLE_CLIENT_ID
+            googleClientSecret = $env:GOOGLE_CLIENT_SECRET
+            googleRedirectPort = 42813
+          } | ConvertTo-Json
+          Set-Content -Path "config/app.public.json" -Value $config -Encoding UTF8
+          Write-Host "app.public.json created"
 
       - name: Align package version with tag
         if: startsWith(github.ref, 'refs/tags/v')

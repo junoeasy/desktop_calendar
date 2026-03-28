@@ -514,13 +514,25 @@ export function App() {
                   onClick={async () => {
                     setAuthMessage(UI_LABELS.loginInProgress);
                     const result = await window.desktopCalApi.auth.signIn();
+                    const status = await window.desktopCalApi.auth.status();
+                    setAuth(status);
                     if (!result.connected) {
-                      setAuthMessage(`${UI_LABELS.loginFailedPrefix}: ${result.error}`);
+                      const calList = await window.desktopCalApi.calendars.list();
+                      setCalendars(calList);
+                      if (status.connected) {
+                        setAuthMessage(`연결은 완료되었지만 초기 동기화에 실패했습니다: ${result.error}`);
+                      } else {
+                        setAuthMessage(`${UI_LABELS.loginFailedPrefix}: ${result.error}`);
+                      }
                       return;
                     }
                     setAuth({ connected: true, user: { email: result.user.email } });
                     setCalendars(result.calendars);
-                    setAuthMessage(UI_LABELS.connectedDone);
+                    if ("warning" in result && typeof result.warning === "string" && result.warning.trim().length > 0) {
+                      setAuthMessage(`연결 완료 (초기 동기화 경고: ${result.warning})`);
+                    } else {
+                      setAuthMessage(UI_LABELS.connectedDone);
+                    }
                   }}
                 >
                   {UI_LABELS.loginGoogle}

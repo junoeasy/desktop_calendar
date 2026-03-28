@@ -427,10 +427,18 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
         email: result.account.email,
         displayName: result.account.name
       });
-      const calendars = await syncCalendarsFromGoogle(user.id);
-      void runSync(false);
-      return { connected: true, user, calendars };
+      let calendars = calendarRepository.listAll();
+      let warning: string | null = null;
+      try {
+        calendars = await syncCalendarsFromGoogle(user.id);
+        void runSync(false);
+      } catch (error) {
+        console.error("[auth:sign-in] syncCalendarsFromGoogle failed:", error);
+        warning = error instanceof Error ? error.message : String(error);
+      }
+      return { connected: true, user, calendars, warning };
     } catch (error) {
+      console.error("[auth:sign-in] failed:", error);
       return {
         connected: false,
         error: error instanceof Error ? error.message : String(error)

@@ -147,7 +147,7 @@ function configureSyncTimer() {
   }
   const settings = settingsRepository.get();
   syncTimer = setInterval(() => {
-    void runSync(false);
+    runSync(false).catch((err: unknown) => console.error("[sync] Scheduled sync failed:", err));
   }, settings.syncIntervalMinutes * 60 * 1000);
 }
 
@@ -157,7 +157,7 @@ function configureRealtimeSyncTimer() {
     realtimeSyncTimer = null;
   }
   realtimeSyncTimer = setInterval(() => {
-    void runSync(false);
+    runSync(false).catch((err: unknown) => console.error("[sync] Realtime sync failed:", err));
   }, 20 * 1000);
 }
 

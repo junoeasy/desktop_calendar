@@ -178,22 +178,26 @@ function mapEvent(row: DbEvent): EventEntity {
 export const eventRepository = {
   listByDay(dateIso: string) {
     const day = dayjs(dateIso).format("YYYY-MM-DD");
-    const dayStart = `${day} 00:00:00`;
-    const dayEnd = `${day} 23:59:59`;
+    // KST(UTC+9) 기준 하루 범위를 UTC로 변환하여 일관된 비교
+    const dayStart = new Date(`${day}T00:00:00.000+09:00`).toISOString();
+    const dayEnd = new Date(`${day}T23:59:59.999+09:00`).toISOString();
     return (getDb()
       .prepare(
         `SELECT * FROM events
          WHERE deleted_at IS NULL
-           AND julianday(datetime(starts_at, 'localtime')) <= julianday(datetime(?))
-           AND julianday(datetime(ends_at, 'localtime')) >= julianday(datetime(?))
+           AND julianday(starts_at) <= julianday(?)
+           AND julianday(ends_at) >= julianday(?)
            AND calendar_id IN (SELECT id FROM calendars WHERE selected = 1)
          ORDER BY starts_at ASC`
       )
       .all(dayEnd, dayStart) as DbEvent[]).map(mapEvent);
   },
   listByMonth(year: number, month: number) {
-    const start = dayjs(`${year}-${String(month).padStart(2, "0")}-01`).startOf("month").toISOString();
-    const end = dayjs(start).endOf("month").toISOString();
+    const monthStr = String(month).padStart(2, "0");
+    // KST(UTC+9) 기준 월 범위를 UTC로 변환
+    const start = new Date(`${year}-${monthStr}-01T00:00:00.000+09:00`).toISOString();
+    const lastDay = String(new Date(year, month, 0).getDate()).padStart(2, "0");
+    const end = new Date(`${year}-${monthStr}-${lastDay}T23:59:59.999+09:00`).toISOString();
     return (getDb()
       .prepare(
         `SELECT * FROM events
