@@ -71,7 +71,9 @@
       "assets/**/*",
       "config/**/*",
       "db/migrations/**/*",
-      "package.json"
+      "package.json",
+      "!index.js",
+      "!syncEngine.js"
     ],
     "asar": true,
     "win": {

@@ -7,3 +7,5 @@ coverage
 *.log
 desktopcal-sync.db
 config/app.public.json
+index.js
+syncEngine.js
