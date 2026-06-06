@@ -19,6 +19,7 @@ import {
   timerStartSchema,
   windowResizeSchema
 } from "../../shared/ipc";
+import { localDateFromIso, localDayBoundsToUtc } from "../../shared/dateTime";
 import { calendarRepository, eventRepository, settingsRepository, syncRepository, userRepository } from "./repositories";
 import { hasGoogleToken, signInWithGoogle, signOutGoogle } from "./googleAuth";
 import { getSyncStatus, runSync, syncCalendarsFromGoogle } from "./syncEngine";
@@ -78,7 +79,7 @@ function summaryPayload() {
     startsAt: event.startsAt,
     allDay: event.allDay
   }));
-  const week = eventRepository.listUpcoming(7).map((event) => ({
+  const week = eventRepository.listRelevantUpcoming(7).map((event) => ({
     id: event.id,
     title: event.title,
     startsAt: event.startsAt,
@@ -413,6 +414,7 @@ function createLocalEvent(input: {
 type RegisterIpcOptions = {
   showTimerOverlayWindow: () => void;
   hideTimerOverlayWindow: () => void;
+  applyRuntimeSettings: () => void;
 };
 
 export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptions) {
@@ -468,6 +470,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     const patch = settingsUpdateSchema.parse(payload);
     const settings = settingsRepository.update(patch);
     applyDesktopPinnedMode(mainWindow, settings.desktopPinned);
+    options.applyRuntimeSettings();
     return settings;
   });
 
@@ -721,8 +724,8 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
       title: String(parsed.title).trim().slice(0, 150),
       description: typeof parsed.description === "string" ? parsed.description.slice(0, 2000) : null,
       location: typeof parsed.location === "string" ? parsed.location.slice(0, 255) : null,
-      startsAt: allDay ? startsAt.startOf("day").toISOString() : startsAt.toISOString(),
-      endsAt: allDay ? endsAt.endOf("day").toISOString() : endsAt.toISOString(),
+      startsAt: allDay ? localDayBoundsToUtc(localDateFromIso(startsAt.toISOString())).start : startsAt.toISOString(),
+      endsAt: allDay ? localDayBoundsToUtc(localDateFromIso(endsAt.toISOString())).end : endsAt.toISOString(),
       allDay
     };
     const validated = eventUpsertSchema.parse(payloadForCreate);

@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import { google } from "googleapis";
 import { getGoogleClient } from "./googleAuth";
+import { localDateFromIso, localDayBoundsToUtc } from "@shared/dateTime";
 
 type GoogleTaskItem = {
   id: string;
@@ -53,12 +54,12 @@ export async function listGoogleTasksByDate(dateIso: string): Promise<GoogleTask
         if (!task.id) continue;
         const due = task.due ?? null;
         if (!due) continue;
-        const dueDate = due.slice(0, 10);
+        const dueDate = localDateFromIso(due);
         if (dueDate !== dateIso) continue;
         result.push({
           id: task.id,
           taskListId: taskList.id,
-          taskListTitle: taskList.title ?? "할 일",
+          taskListTitle: taskList.title ?? "기본 목록",
           title: task.title?.trim() || "(제목 없음)",
           notes: task.notes ?? null,
           due,
@@ -132,8 +133,7 @@ export async function createGoogleTask(input: { title: string; dateIso: string; 
       tasklist: taskListId,
       requestBody: {
         title: input.title.trim(),
-        // Keep calendar date stable for date-only task filtering.
-        due: `${date.format("YYYY-MM-DD")}T00:00:00.000Z`,
+        due: localDayBoundsToUtc(date.format("YYYY-MM-DD")).start,
         status: "needsAction"
       }
     });

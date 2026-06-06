@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import type { CalendarRow } from "@shared/apiTypes";
+import { localDateTimeToUtcIso, localDayBoundsToUtc } from "@shared/dateTime";
 
 type EventInput = {
   id?: string;
@@ -57,9 +58,8 @@ export function EventModal({ open, date, defaultCalendarId, calendars, editing, 
         title: title.trim(),
         location: location || null,
         description: description || null,
-        // 종일 이벤트는 KST(UTC+9) 기준 하루 전체를 UTC로 변환하여 저장
-        startsAt: allDay ? new Date(`${date}T00:00:00.000+09:00`).toISOString() : dayjs(`${date}T${startTime}`).toISOString(),
-        endsAt: allDay ? new Date(`${date}T23:59:59.999+09:00`).toISOString() : dayjs(`${date}T${endTime}`).toISOString(),
+        startsAt: allDay ? localDayBoundsToUtc(date).start : localDateTimeToUtcIso(date, startTime),
+        endsAt: allDay ? localDayBoundsToUtc(date).end : localDateTimeToUtcIso(date, endTime),
         allDay
       });
       onClose();
@@ -71,14 +71,14 @@ export function EventModal({ open, date, defaultCalendarId, calendars, editing, 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl">
-        <h2 className="mb-4 text-lg font-semibold">{editing ? "\uC77C\uC815 \uC218\uC815" : "\uC77C\uC815 \uCD94\uAC00"}</h2>
+        <h2 className="mb-4 text-lg font-semibold">{editing ? "일정 수정" : "일정 추가"}</h2>
         <div className="space-y-3">
-          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="\uC81C\uBAA9" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="\uC7A5\uC18C" value={location} onChange={(e) => setLocation(e.target.value)} />
-          <textarea className="w-full rounded border border-slate-300 px-3 py-2" rows={3} placeholder="\uBA54\uBAA8" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input className="w-full rounded border border-slate-300 px-3 py-2" placeholder="장소" value={location} onChange={(e) => setLocation(e.target.value)} />
+          <textarea className="w-full rounded border border-slate-300 px-3 py-2" rows={3} placeholder="메모" value={description} onChange={(e) => setDescription(e.target.value)} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-            \uD558\uB8E8 \uC885\uC77C
+            하루 종일
           </label>
           <select className="w-full rounded border border-slate-300 px-3 py-2 text-sm" value={calendarId} onChange={(e) => setCalendarId(e.target.value)}>
             {calendars.map((calendar) => (
@@ -96,10 +96,10 @@ export function EventModal({ open, date, defaultCalendarId, calendars, editing, 
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button className="rounded border px-3 py-2" onClick={onClose} type="button">
-            \uCDE8\uC18C
+            취소
           </button>
           <button className="rounded bg-accent px-3 py-2 text-white" onClick={handleSubmit} disabled={submitting} type="button">
-            {submitting ? "\uC800\uC7A5 \uC911..." : "\uC800\uC7A5"}
+            {submitting ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>

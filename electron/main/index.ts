@@ -1,8 +1,9 @@
-﻿import { app, BrowserWindow, Notification } from "electron";
+import { app, BrowserWindow, Notification } from "electron";
 import dayjs from "dayjs";
 import Store from "electron-store";
 import { NOTIFICATION_EVENTS } from "../../shared/ipc";
 import type { NotificationSummaryPayload } from "../../shared/apiTypes";
+import { addDaysToDateIso, localDateFromIso } from "../../shared/dateTime";
 import { createMainWindow } from "./window";
 import { createTray } from "./tray";
 import { registerIpc } from "./ipc";
@@ -40,7 +41,7 @@ function getSummaryPayload(): NotificationSummaryPayload {
     startsAt: event.startsAt,
     allDay: event.allDay
   }));
-  const week = eventRepository.listUpcoming(7).map((event) => ({
+  const week = eventRepository.listRelevantUpcoming(7).map((event) => ({
     id: event.id,
     title: event.title,
     startsAt: event.startsAt,
@@ -77,7 +78,7 @@ function showDesktopNotification(title: string, body: string) {
 }
 
 function sendWeeklyDigestNotification() {
-  const upcoming = eventRepository.listUpcoming(7);
+  const upcoming = eventRepository.listRelevantUpcoming(7);
   if (upcoming.length === 0) {
     showDesktopNotification("이번 주 일정", "앞으로 7일간 등록된 일정이 없습니다.");
     return;
@@ -94,22 +95,24 @@ function sendWeeklyDigestNotification() {
 }
 
 function runDayBeforeReminderCheck() {
-  const now = dayjs();
+  const now = new Date();
+  const todayDate = localDateFromIso(now);
   const upcoming = eventRepository.listUpcoming(8);
   const notified = reminderStore.get("notifiedReminderKeys");
   const nextNotified = { ...notified };
 
   for (const event of upcoming) {
-    const startAt = dayjs(event.startsAt);
-    if (!startAt.isValid()) continue;
-    if (startAt.isBefore(now)) continue;
-    const reminderAt = startAt.subtract(1, "day");
-    if (reminderAt.isAfter(now)) continue;
+    const startAt = new Date(event.startsAt);
+    if (Number.isNaN(startAt.getTime())) continue;
+    if (startAt.getTime() <= now.getTime()) continue;
+
+    const reminderDate = addDaysToDateIso(localDateFromIso(startAt), -1);
+    if (reminderDate !== todayDate) continue;
 
     const key = `${event.id}:${event.startsAt}`;
     if (nextNotified[key]) continue;
 
-    const when = event.allDay ? `${startAt.format("M/D")} 하루 종일` : startAt.format("M/D HH:mm");
+    const when = event.allDay ? `${dayjs(event.startsAt).format("M/D")} 하루 종일` : dayjs(event.startsAt).format("M/D HH:mm");
     showDesktopNotification("내일 일정 알림", `${when} ${event.title}`);
     nextNotified[key] = new Date().toISOString();
   }
@@ -161,6 +164,11 @@ function configureRealtimeSyncTimer() {
   }, 20 * 1000);
 }
 
+function applyRuntimeSettings() {
+  configureAutoLaunch();
+  configureSyncTimer();
+}
+
 async function bootstrap() {
   mainWindow = createMainWindow();
   const settings = settingsRepository.get();
@@ -173,10 +181,9 @@ async function bootstrap() {
     mainWindow.setMaximumSize(WINDOW_MAX_WIDTH, WINDOW_MAX_HEIGHT);
   }
 
-  registerIpc(mainWindow, { showTimerOverlayWindow, hideTimerOverlayWindow });
+  registerIpc(mainWindow, { showTimerOverlayWindow, hideTimerOverlayWindow, applyRuntimeSettings });
   createTray(mainWindow);
-  configureAutoLaunch();
-  configureSyncTimer();
+  applyRuntimeSettings();
   configureRealtimeSyncTimer();
   configureReminderTimer();
   configureAutoUpdater(mainWindow);

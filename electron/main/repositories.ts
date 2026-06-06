@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import dayjs from "dayjs";
 import { getDb } from "./db";
 import type { AppSettings, CalendarEntity, EventEntity, SyncQueueItem, User } from "../../shared/models";
+import { localDayBoundsToUtc, localMonthBoundsToUtc } from "../../shared/dateTime";
 import { computeRetryDelaySeconds, resolveByUpdatedAt } from "./syncUtils";
 
 function nowIso() {
@@ -111,6 +112,60 @@ export const calendarRepository = {
     });
     tx();
   },
+  replaceForUser(userId: string, calendars: Array<Partial<CalendarEntity> & { providerCalendarId: string; title: string }>) {
+    const db = getDb();
+    const providerIds = calendars.map((calendar) => calendar.providerCalendarId).filter(Boolean);
+    const upsert = db.prepare(
+      `INSERT INTO calendars (id, user_id, provider_calendar_id, title, color_hex, selected, etag, updated_at)
+       VALUES (@id, @user_id, @provider_calendar_id, @title, @color_hex, @selected, @etag, @updated_at)
+       ON CONFLICT(provider_calendar_id) DO UPDATE SET
+         title=excluded.title, color_hex=excluded.color_hex, selected=excluded.selected, etag=excluded.etag, updated_at=excluded.updated_at`
+    );
+    const selectStale = providerIds.length
+      ? db.prepare(
+          `SELECT id, provider_calendar_id FROM calendars
+           WHERE user_id = ?
+             AND provider_calendar_id NOT IN (${providerIds.map(() => "?").join(", ")})`
+        )
+      : db.prepare("SELECT id, provider_calendar_id FROM calendars WHERE user_id = ?");
+    const deleteEventsByCalendar = db.prepare("DELETE FROM events WHERE calendar_id = ?");
+    const deleteQueueByEvent = db.prepare("DELETE FROM sync_queue WHERE entity_type = 'event' AND entity_id = ?");
+    const selectEventIdsByCalendar = db.prepare("SELECT id FROM events WHERE calendar_id = ?");
+    const deleteSyncState = db.prepare("DELETE FROM sync_state WHERE id = ?");
+    const deleteCalendar = db.prepare("DELETE FROM calendars WHERE id = ?");
+    const ts = nowIso();
+
+    const tx = db.transaction(() => {
+      for (const calendar of calendars) {
+        upsert.run({
+          id: calendar.id ?? uuidv4(),
+          user_id: userId,
+          provider_calendar_id: calendar.providerCalendarId,
+          title: calendar.title,
+          color_hex: calendar.colorHex ?? null,
+          selected: calendar.selected ?? 1,
+          etag: calendar.etag ?? null,
+          updated_at: ts
+        });
+      }
+
+      const staleCalendars = (
+        providerIds.length ? selectStale.all(userId, ...providerIds) : selectStale.all(userId)
+      ) as Array<{ id: string; provider_calendar_id: string }>;
+
+      for (const stale of staleCalendars) {
+        const eventRows = selectEventIdsByCalendar.all(stale.id) as Array<{ id: string }>;
+        for (const eventRow of eventRows) {
+          deleteQueueByEvent.run(eventRow.id);
+        }
+        deleteEventsByCalendar.run(stale.id);
+        deleteSyncState.run(syncRepository.syncTokenKey(stale.provider_calendar_id));
+        deleteCalendar.run(stale.id);
+      }
+    });
+
+    tx();
+  },
   listSelected() {
     const db = getDb();
     return db
@@ -178,9 +233,7 @@ function mapEvent(row: DbEvent): EventEntity {
 export const eventRepository = {
   listByDay(dateIso: string) {
     const day = dayjs(dateIso).format("YYYY-MM-DD");
-    // KST(UTC+9) 기준 하루 범위를 UTC로 변환하여 일관된 비교
-    const dayStart = new Date(`${day}T00:00:00.000+09:00`).toISOString();
-    const dayEnd = new Date(`${day}T23:59:59.999+09:00`).toISOString();
+    const { start: dayStart, end: dayEnd } = localDayBoundsToUtc(day);
     return (getDb()
       .prepare(
         `SELECT * FROM events
@@ -193,11 +246,7 @@ export const eventRepository = {
       .all(dayEnd, dayStart) as DbEvent[]).map(mapEvent);
   },
   listByMonth(year: number, month: number) {
-    const monthStr = String(month).padStart(2, "0");
-    // KST(UTC+9) 기준 월 범위를 UTC로 변환
-    const start = new Date(`${year}-${monthStr}-01T00:00:00.000+09:00`).toISOString();
-    const lastDay = String(new Date(year, month, 0).getDate()).padStart(2, "0");
-    const end = new Date(`${year}-${monthStr}-${lastDay}T23:59:59.999+09:00`).toISOString();
+    const { start, end } = localMonthBoundsToUtc(year, month);
     return (getDb()
       .prepare(
         `SELECT * FROM events
@@ -223,7 +272,25 @@ export const eventRepository = {
       )
       .all(start, end) as DbEvent[]).map(mapEvent);
   },
-  upsertLocal(input: Omit<EventEntity, "id" | "createdAt" | "updatedAt" | "localUpdatedAt" | "providerEventId" | "etag" | "remoteUpdatedAt" | "deletedAt"> & { id?: string }) {
+  listRelevantUpcoming(days = 7) {
+    const now = nowIso();
+    const end = dayjs().add(days, "day").toISOString();
+    return (getDb()
+      .prepare(
+        `SELECT * FROM events
+         WHERE deleted_at IS NULL
+           AND julianday(ends_at) >= julianday(?)
+           AND julianday(starts_at) <= julianday(?)
+           AND calendar_id IN (SELECT id FROM calendars WHERE selected = 1)
+         ORDER BY starts_at ASC`
+      )
+      .all(now, end) as DbEvent[]).map(mapEvent);
+  },
+  upsertLocal(
+    input: Omit<EventEntity, "id" | "createdAt" | "updatedAt" | "localUpdatedAt" | "providerEventId" | "etag" | "remoteUpdatedAt" | "deletedAt"> & {
+      id?: string;
+    }
+  ) {
     const id = input.id ?? uuidv4();
     const ts = nowIso();
     getDb()
