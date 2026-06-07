@@ -81,6 +81,8 @@ npm run dist:mac:arm64
 - `release/DesktopCal Sync-<version>.dmg`
 - `release/mac*/`
 
+macOS에서 Gatekeeper 경고 없이 배포하려면 Apple Developer ID 서명과 notarization secrets가 필요합니다. 자세한 설정은 [docs/MACOS_SIGNING.md](docs/MACOS_SIGNING.md)를 참고하세요.
+
 ## 공개 앱 설정
 
 Google OAuth의 공통 `client_id`는 `config/app.public.json`에서 관리합니다.
