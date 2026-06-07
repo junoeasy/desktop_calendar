@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { calendarRepository, eventRepository, syncRepository } from "./repositories";
 import { getGoogleClient } from "./googleAuth";
 import type { EventEntity } from "@shared/models";
+import { addDaysToDateIso, localDateFromIso, localDayBoundsToUtc } from "@shared/dateTime";
 
 export type SyncStatus = {
   running: boolean;
@@ -33,18 +34,20 @@ export async function syncCalendarsFromGoogle(userId: string) {
       selected: item.selected === false ? 0 : 1,
       etag: item.etag ?? null
     })) ?? [];
-  calendarRepository.upsertMany(userId, calendars.filter((x) => x.providerCalendarId));
+  calendarRepository.replaceForUser(userId, calendars.filter((x) => x.providerCalendarId));
   return calendarRepository.listAll();
 }
 
 function toGoogleEvent(event: EventEntity) {
   if (event.allDay) {
+    const startDate = localDateFromIso(event.startsAt);
+    const endDateExclusive = addDaysToDateIso(localDateFromIso(event.endsAt), 1);
     return {
       summary: event.title,
       description: event.description ?? undefined,
       location: event.location ?? undefined,
-      start: { date: event.startsAt.slice(0, 10) },
-      end: { date: dayjs(event.endsAt).add(1, "day").format("YYYY-MM-DD") }
+      start: { date: startDate },
+      end: { date: endDateExclusive }
     };
   }
   return {
@@ -62,8 +65,8 @@ async function pullFromGoogle() {
     return;
   }
   const api = google.calendar({ version: "v3", auth: client });
-  let syncToken = syncRepository.getSyncToken();
   for (const cal of selectedCalendars()) {
+    let syncToken = syncRepository.getSyncToken(cal.provider_calendar_id);
     const baseParams = {
       calendarId: cal.provider_calendar_id,
       maxResults: 1000,
@@ -90,7 +93,7 @@ async function pullFromGoogle() {
         if (!shouldReset) {
           throw error;
         }
-        syncRepository.setSyncToken(null);
+        syncRepository.setSyncToken(cal.provider_calendar_id, null);
         syncToken = null;
         pageToken = undefined;
         resp = await api.events.list(baseParams);
@@ -100,22 +103,20 @@ async function pullFromGoogle() {
       for (const item of items) {
         if (!item.id) continue;
         if (item.status === "cancelled") {
-          const local = eventRepository
-            .listPendingSync()
-            .find((e) => e.providerEventId === item.id);
+          const local = eventRepository.getByProviderEventId(item.id);
           if (local) {
             eventRepository.hardDelete(local.id);
           }
           continue;
         }
         const isAllDay = Boolean(item.start?.date && item.end?.date);
+        const fallbackDay = dayjs().format("YYYY-MM-DD");
         const startsAt = isAllDay
-          ? dayjs(item.start?.date).startOf("day").toISOString()
-          : item.start?.dateTime ?? `${dayjs().format("YYYY-MM-DD")}T00:00:00.000Z`;
-        // Google all-day end.date is exclusive; subtract one day for inclusive local storage.
+          ? localDayBoundsToUtc(item.start?.date ?? fallbackDay).start
+          : item.start?.dateTime ?? localDayBoundsToUtc(fallbackDay).start;
         const endsAt = isAllDay
-          ? dayjs(item.end?.date).subtract(1, "day").endOf("day").toISOString()
-          : item.end?.dateTime ?? `${dayjs().format("YYYY-MM-DD")}T23:59:59.999Z`;
+          ? localDayBoundsToUtc(addDaysToDateIso(item.end?.date ?? addDaysToDateIso(fallbackDay, 1), -1)).end
+          : item.end?.dateTime ?? localDayBoundsToUtc(fallbackDay).end;
         eventRepository.upsertRemote({
           calendarId: cal.id,
           providerEventId: item.id,
@@ -134,7 +135,7 @@ async function pullFromGoogle() {
       nextSyncToken = resp.data.nextSyncToken ?? nextSyncToken;
     } while (pageToken);
 
-    syncRepository.setSyncToken(nextSyncToken);
+    syncRepository.setSyncToken(cal.provider_calendar_id, nextSyncToken);
   }
 }
 
@@ -174,8 +175,10 @@ async function pushQueue() {
           title: updated.data.summary ?? event.title,
           description: updated.data.description ?? event.description,
           location: updated.data.location ?? event.location,
-          startsAt: updated.data.start?.dateTime ?? event.startsAt,
-          endsAt: updated.data.end?.dateTime ?? event.endsAt,
+          startsAt: updated.data.start?.date ? localDayBoundsToUtc(updated.data.start.date).start : updated.data.start?.dateTime ?? event.startsAt,
+          endsAt: updated.data.end?.date
+            ? localDayBoundsToUtc(addDaysToDateIso(updated.data.end.date, -1)).end
+            : updated.data.end?.dateTime ?? event.endsAt,
           allDay: updated.data.start?.date ? 1 : event.allDay,
           etag: updated.data.etag ?? null,
           remoteUpdatedAt: updated.data.updated ?? null
@@ -191,8 +194,10 @@ async function pushQueue() {
           title: created.data.summary ?? event.title,
           description: created.data.description ?? event.description,
           location: created.data.location ?? event.location,
-          startsAt: created.data.start?.dateTime ?? event.startsAt,
-          endsAt: created.data.end?.dateTime ?? event.endsAt,
+          startsAt: created.data.start?.date ? localDayBoundsToUtc(created.data.start.date).start : created.data.start?.dateTime ?? event.startsAt,
+          endsAt: created.data.end?.date
+            ? localDayBoundsToUtc(addDaysToDateIso(created.data.end.date, -1)).end
+            : created.data.end?.dateTime ?? event.endsAt,
           allDay: created.data.start?.date ? 1 : event.allDay,
           etag: created.data.etag ?? null,
           remoteUpdatedAt: created.data.updated ?? null
@@ -212,8 +217,12 @@ export async function runSync(forceFull = false) {
   status.running = true;
   status.lastError = null;
   try {
+    if (!getGoogleClient()) {
+      status.lastError = "Google 연결이 없어 동기화를 진행할 수 없습니다. 다시 로그인해 주세요.";
+      return status;
+    }
     if (forceFull) {
-      syncRepository.setSyncToken(null);
+      syncRepository.clearAllSyncTokens();
     }
     await pushQueue();
     if (forceFull) {

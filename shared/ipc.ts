@@ -24,6 +24,15 @@ export const syncTriggerSchema = z.object({
   forceFull: z.boolean().optional()
 });
 
+export const timerStartSchema = z.object({
+  durationMinutes: z.number().int().min(1).max(720).optional(),
+  problemName: z.string().min(1).max(120).optional()
+});
+
+export const savedTimerActionSchema = z.object({
+  savedTimerId: z.string().uuid()
+});
+
 export const settingsUpdateSchema = z.object({
   startupLaunch: z.boolean().optional(),
   minimizeToTray: z.boolean().optional(),
@@ -44,15 +53,79 @@ export const calendarColorSchema = z.object({
   colorHex: z.string().regex(/^#[0-9a-fA-F]{6}$/)
 });
 
+export const windowResizeSchema = z.object({
+  width: z.number().int().min(220).max(4096),
+  height: z.number().int().min(90).max(3072)
+});
+
+export const openClawChatSchema = z.object({
+  message: z.string().min(1).max(4000),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(4000)
+      })
+    )
+    .max(50)
+    .optional()
+});
+
+export const openClawCreateEventSchema = z.object({
+  message: z.string().min(1).max(4000),
+  calendarId: z.string().uuid().optional(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(4000)
+      })
+    )
+    .max(50)
+    .optional()
+});
+
+export const tasksByDateSchema = z.object({
+  dateIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+});
+
+export const taskCompleteSchema = z.object({
+  taskListId: z.string().min(1),
+  taskId: z.string().min(1),
+  completed: z.boolean().optional()
+});
+
+export const taskCreateSchema = z.object({
+  title: z.string().min(1).max(300),
+  dateIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  taskListId: z.string().min(1).optional()
+});
+
+export const taskDeleteSchema = z.object({
+  taskListId: z.string().min(1),
+  taskId: z.string().min(1)
+});
+
 export type EventUpsertInput = z.infer<typeof eventUpsertSchema>;
 export type EventDeleteInput = z.infer<typeof eventDeleteSchema>;
 export type MonthQueryInput = z.infer<typeof monthQuerySchema>;
 export type SyncTriggerInput = z.infer<typeof syncTriggerSchema>;
+export type TimerStartInput = z.infer<typeof timerStartSchema>;
+export type SavedTimerActionInput = z.infer<typeof savedTimerActionSchema>;
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
 export type CalendarSelectionInput = z.infer<typeof calendarSelectionSchema>;
 export type CalendarColorInput = z.infer<typeof calendarColorSchema>;
+export type WindowResizeInput = z.infer<typeof windowResizeSchema>;
+export type OpenClawChatInput = z.infer<typeof openClawChatSchema>;
+export type OpenClawCreateEventInput = z.infer<typeof openClawCreateEventSchema>;
+export type TasksByDateInput = z.infer<typeof tasksByDateSchema>;
+export type TaskCompleteInput = z.infer<typeof taskCompleteSchema>;
+export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
+export type TaskDeleteInput = z.infer<typeof taskDeleteSchema>;
 
 export const IPC_CHANNELS = {
+  appVersion: "app:version",
+  appCheckUpdates: "app:check-updates",
   authSignIn: "auth:sign-in",
   authSignOut: "auth:sign-out",
   authStatus: "auth:status",
@@ -68,8 +141,27 @@ export const IPC_CHANNELS = {
   eventDelete: "event:delete",
   syncNow: "sync:now",
   syncStatus: "sync:status",
+  timerStart: "timer:start",
+  timerPause: "timer:pause",
+  timerResume: "timer:resume",
+  timerSave: "timer:save",
+  timerStop: "timer:stop",
+  timerResumeSaved: "timer:resume-saved",
+  timerDeleteSaved: "timer:delete-saved",
+  timerSavedList: "timer:saved-list",
+  timerComplete: "timer:complete",
+  timerStatus: "timer:status",
   summaryGet: "summary:get",
   desktopPinned: "window:desktop-pinned",
+  windowGetBounds: "window:get-bounds",
+  windowResize: "window:resize",
+  openClawChat: "openclaw:chat",
+  openClawCreateEvent: "openclaw:event-create",
+  tasksByDate: "tasks:by-date",
+  tasksToday: "tasks:today",
+  taskComplete: "tasks:complete",
+  taskCreate: "tasks:create",
+  taskDelete: "tasks:delete",
   setTrayMinimize: "window:tray-minimize"
 } as const;
 

@@ -81,3 +81,4 @@ export function SettingsPanel({ onPatchSettings, onSyncNow }: Props) {
     </div>
   );
 }
+

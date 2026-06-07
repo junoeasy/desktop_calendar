@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import dayjs from "dayjs";
 import { getDb } from "./db";
 import type { AppSettings, CalendarEntity, EventEntity, SyncQueueItem, User } from "../../shared/models";
+import { localDayBoundsToUtc, localMonthBoundsToUtc } from "../../shared/dateTime";
 import { computeRetryDelaySeconds, resolveByUpdatedAt } from "./syncUtils";
 
 function nowIso() {
@@ -79,6 +80,9 @@ export const userRepository = {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
+  },
+  clearAll() {
+    getDb().prepare("DELETE FROM users").run();
   }
 };
 
@@ -108,6 +112,60 @@ export const calendarRepository = {
     });
     tx();
   },
+  replaceForUser(userId: string, calendars: Array<Partial<CalendarEntity> & { providerCalendarId: string; title: string }>) {
+    const db = getDb();
+    const providerIds = calendars.map((calendar) => calendar.providerCalendarId).filter(Boolean);
+    const upsert = db.prepare(
+      `INSERT INTO calendars (id, user_id, provider_calendar_id, title, color_hex, selected, etag, updated_at)
+       VALUES (@id, @user_id, @provider_calendar_id, @title, @color_hex, @selected, @etag, @updated_at)
+       ON CONFLICT(provider_calendar_id) DO UPDATE SET
+         title=excluded.title, color_hex=excluded.color_hex, selected=excluded.selected, etag=excluded.etag, updated_at=excluded.updated_at`
+    );
+    const selectStale = providerIds.length
+      ? db.prepare(
+          `SELECT id, provider_calendar_id FROM calendars
+           WHERE user_id = ?
+             AND provider_calendar_id NOT IN (${providerIds.map(() => "?").join(", ")})`
+        )
+      : db.prepare("SELECT id, provider_calendar_id FROM calendars WHERE user_id = ?");
+    const deleteEventsByCalendar = db.prepare("DELETE FROM events WHERE calendar_id = ?");
+    const deleteQueueByEvent = db.prepare("DELETE FROM sync_queue WHERE entity_type = 'event' AND entity_id = ?");
+    const selectEventIdsByCalendar = db.prepare("SELECT id FROM events WHERE calendar_id = ?");
+    const deleteSyncState = db.prepare("DELETE FROM sync_state WHERE id = ?");
+    const deleteCalendar = db.prepare("DELETE FROM calendars WHERE id = ?");
+    const ts = nowIso();
+
+    const tx = db.transaction(() => {
+      for (const calendar of calendars) {
+        upsert.run({
+          id: calendar.id ?? uuidv4(),
+          user_id: userId,
+          provider_calendar_id: calendar.providerCalendarId,
+          title: calendar.title,
+          color_hex: calendar.colorHex ?? null,
+          selected: calendar.selected ?? 1,
+          etag: calendar.etag ?? null,
+          updated_at: ts
+        });
+      }
+
+      const staleCalendars = (
+        providerIds.length ? selectStale.all(userId, ...providerIds) : selectStale.all(userId)
+      ) as Array<{ id: string; provider_calendar_id: string }>;
+
+      for (const stale of staleCalendars) {
+        const eventRows = selectEventIdsByCalendar.all(stale.id) as Array<{ id: string }>;
+        for (const eventRow of eventRows) {
+          deleteQueueByEvent.run(eventRow.id);
+        }
+        deleteEventsByCalendar.run(stale.id);
+        deleteSyncState.run(syncRepository.syncTokenKey(stale.provider_calendar_id));
+        deleteCalendar.run(stale.id);
+      }
+    });
+
+    tx();
+  },
   listSelected() {
     const db = getDb();
     return db
@@ -128,6 +186,9 @@ export const calendarRepository = {
     return getDb()
       .prepare("SELECT * FROM calendars WHERE provider_calendar_id = ?")
       .get(providerCalendarId) as { id: string } | undefined;
+  },
+  clearAll() {
+    getDb().prepare("DELETE FROM calendars").run();
   }
 };
 
@@ -172,19 +233,20 @@ function mapEvent(row: DbEvent): EventEntity {
 export const eventRepository = {
   listByDay(dateIso: string) {
     const day = dayjs(dateIso).format("YYYY-MM-DD");
+    const { start: dayStart, end: dayEnd } = localDayBoundsToUtc(day);
     return (getDb()
       .prepare(
         `SELECT * FROM events
          WHERE deleted_at IS NULL
-           AND date(datetime(starts_at), 'localtime') = date(?)
+           AND julianday(starts_at) <= julianday(?)
+           AND julianday(ends_at) >= julianday(?)
            AND calendar_id IN (SELECT id FROM calendars WHERE selected = 1)
          ORDER BY starts_at ASC`
       )
-      .all(day) as DbEvent[]).map(mapEvent);
+      .all(dayEnd, dayStart) as DbEvent[]).map(mapEvent);
   },
   listByMonth(year: number, month: number) {
-    const start = dayjs(`${year}-${String(month).padStart(2, "0")}-01`).startOf("month").toISOString();
-    const end = dayjs(start).endOf("month").toISOString();
+    const { start, end } = localMonthBoundsToUtc(year, month);
     return (getDb()
       .prepare(
         `SELECT * FROM events
@@ -210,7 +272,25 @@ export const eventRepository = {
       )
       .all(start, end) as DbEvent[]).map(mapEvent);
   },
-  upsertLocal(input: Omit<EventEntity, "id" | "createdAt" | "updatedAt" | "localUpdatedAt" | "providerEventId" | "etag" | "remoteUpdatedAt" | "deletedAt"> & { id?: string }) {
+  listRelevantUpcoming(days = 7) {
+    const now = nowIso();
+    const end = dayjs().add(days, "day").toISOString();
+    return (getDb()
+      .prepare(
+        `SELECT * FROM events
+         WHERE deleted_at IS NULL
+           AND julianday(ends_at) >= julianday(?)
+           AND julianday(starts_at) <= julianday(?)
+           AND calendar_id IN (SELECT id FROM calendars WHERE selected = 1)
+         ORDER BY starts_at ASC`
+      )
+      .all(now, end) as DbEvent[]).map(mapEvent);
+  },
+  upsertLocal(
+    input: Omit<EventEntity, "id" | "createdAt" | "updatedAt" | "localUpdatedAt" | "providerEventId" | "etag" | "remoteUpdatedAt" | "deletedAt"> & {
+      id?: string;
+    }
+  ) {
     const id = input.id ?? uuidv4();
     const ts = nowIso();
     getDb()
@@ -238,8 +318,15 @@ export const eventRepository = {
   clearRemoteCache() {
     getDb().prepare("DELETE FROM events WHERE provider_event_id IS NOT NULL").run();
   },
+  clearAll() {
+    getDb().prepare("DELETE FROM events").run();
+  },
   getById(id: string) {
     const row = getDb().prepare("SELECT * FROM events WHERE id = ?").get(id) as DbEvent | undefined;
+    return row ? mapEvent(row) : null;
+  },
+  getByProviderEventId(providerEventId: string) {
+    const row = getDb().prepare("SELECT * FROM events WHERE provider_event_id = ?").get(providerEventId) as DbEvent | undefined;
     return row ? mapEvent(row) : null;
   },
   upsertRemote(row: {
@@ -314,14 +401,37 @@ export const syncRepository = {
       .run(uuidv4(), item.action, item.entityType, item.entityId, item.payloadJson, ts, ts, ts);
   },
   listReady(limit = 50) {
-    return getDb()
+    const rows = getDb()
       .prepare(
         `SELECT * FROM sync_queue
          WHERE next_retry_at <= ?
          ORDER BY created_at ASC
          LIMIT ?`
       )
-      .all(nowIso(), limit) as SyncQueueItem[];
+      .all(nowIso(), limit) as Array<{
+      id: string;
+      action: "create" | "update" | "delete";
+      entity_type: "event";
+      entity_id: string;
+      payload_json: string;
+      attempts: number;
+      next_retry_at: string;
+      last_error: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      payloadJson: row.payload_json,
+      attempts: row.attempts,
+      nextRetryAt: row.next_retry_at,
+      lastError: row.last_error,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
   },
   markSuccess(id: string) {
     getDb().prepare("DELETE FROM sync_queue WHERE id = ?").run(id);
@@ -333,19 +443,33 @@ export const syncRepository = {
       .prepare("UPDATE sync_queue SET attempts = ?, next_retry_at = ?, last_error = ?, updated_at = ? WHERE id = ?")
       .run(attempts, nextRetryAt, error, nowIso(), id);
   },
-  setSyncToken(token: string | null) {
+  syncTokenKey(calendarProviderId: string) {
+    return `google:${calendarProviderId}`;
+  },
+  setSyncToken(calendarProviderId: string, token: string | null) {
     const ts = nowIso();
     getDb()
       .prepare(
         `INSERT INTO sync_state (id, user_id, provider, sync_token, last_full_sync_at, updated_at)
-         VALUES ('google-main', '', 'google', ?, ?, ?)
+         VALUES (?, '', 'google', ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET sync_token=excluded.sync_token, updated_at=excluded.updated_at`
       )
-      .run(token, ts, ts);
+      .run(this.syncTokenKey(calendarProviderId), token, ts, ts);
   },
-  getSyncToken() {
-    const row = getDb().prepare("SELECT sync_token FROM sync_state WHERE id='google-main'").get() as { sync_token: string | null } | undefined;
+  getSyncToken(calendarProviderId: string) {
+    const row = getDb()
+      .prepare("SELECT sync_token FROM sync_state WHERE id = ?")
+      .get(this.syncTokenKey(calendarProviderId)) as { sync_token: string | null } | undefined;
     return row?.sync_token ?? null;
+  },
+  clearAllSyncTokens() {
+    getDb()
+      .prepare("UPDATE sync_state SET sync_token = NULL, updated_at = ? WHERE provider = 'google'")
+      .run(nowIso());
+  },
+  clearAll() {
+    getDb().prepare("DELETE FROM sync_queue").run();
+    getDb().prepare("DELETE FROM sync_state").run();
   }
 };
 

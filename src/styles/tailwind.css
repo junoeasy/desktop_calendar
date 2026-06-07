@@ -21,6 +21,21 @@ body {
   background: transparent;
 }
 
+html,
+body,
+#root {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .app-drag {
   -webkit-app-region: drag;
 }

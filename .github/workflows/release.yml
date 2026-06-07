@@ -1,0 +1,56 @@
+name: Release Windows App
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-windows:
+    runs-on: windows-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create app config from secrets
+        shell: pwsh
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          $config = @{
+            googleClientId = $env:GOOGLE_CLIENT_ID
+            googleClientSecret = $env:GOOGLE_CLIENT_SECRET
+            googleRedirectPort = 42813
+          } | ConvertTo-Json
+          Set-Content -Path "config/app.public.json" -Value $config -Encoding UTF8
+          Write-Host "app.public.json created"
+
+      - name: Align package version with tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          npm version $version --no-git-tag-version
+          Write-Host "Version aligned to $version"
+
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:publish

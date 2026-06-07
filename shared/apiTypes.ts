@@ -28,6 +28,52 @@ export type SyncStatus = {
   lastError: string | null;
 };
 
+export type StudyTimerCompletion = {
+  completedAt: string;
+  savedToCalendar: boolean;
+  eventId: string | null;
+  message: string;
+};
+
+export type StudySavedTimer = {
+  id: string;
+  problemName: string;
+  durationMinutes: number;
+  elapsedSeconds: number;
+  elapsedLabel: string;
+  savedAt: string;
+};
+
+export type StudyCompletedTimer = {
+  id: string;
+  problemName: string;
+  durationMinutes: number;
+  elapsedSeconds: number;
+  elapsedLabel: string;
+  completedAt: string;
+  savedToCalendar: boolean;
+  eventId: string | null;
+};
+
+export type StudyTimerStatus = {
+  active: boolean;
+  running: boolean;
+  paused: boolean;
+  durationMinutes: number;
+  problemName: string | null;
+  startedAt: string | null;
+  elapsedSeconds: number;
+  remainingSeconds: number;
+  overtimeSeconds: number;
+  progress: number;
+  elapsedLabel: string;
+  remainingLabel: string;
+  overtimeLabel: string;
+  lastResult: StudyTimerCompletion | null;
+  savedTimers: StudySavedTimer[];
+  completedTimers: StudyCompletedTimer[];
+};
+
 export type SummaryEvent = {
   id: string;
   title: string;
@@ -41,7 +87,33 @@ export type NotificationSummaryPayload = {
   week: SummaryEvent[];
 };
 
+export type WindowBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type GoogleTaskItem = {
+  id: string;
+  taskListId: string;
+  taskListTitle: string;
+  title: string;
+  notes: string | null;
+  due: string | null;
+  status: "needsAction" | "completed";
+  completedAt: string | null;
+};
+
+export type AppUpdateCheckResult =
+  | { ok: true; status: "available" | "none"; message: string; version?: string }
+  | { ok: false; status: "unsupported" | "checking" | "error"; message: string };
+
 export type DesktopCalBridge = {
+  app: {
+    version: () => Promise<string>;
+    checkUpdates: () => Promise<AppUpdateCheckResult>;
+  };
   auth: {
     signIn: () => Promise<{ connected: true; user: User; calendars: CalendarRow[] } | { connected: false; error: string }>;
     signOut: () => Promise<{ connected: false }>;
@@ -67,13 +139,41 @@ export type DesktopCalBridge = {
     now: (payload?: { forceFull?: boolean }) => Promise<SyncStatus>;
     status: () => Promise<SyncStatus>;
   };
+  timer: {
+    start: (payload?: { durationMinutes?: number; problemName?: string }) => Promise<StudyTimerStatus>;
+    pause: () => Promise<StudyTimerStatus>;
+    resume: () => Promise<StudyTimerStatus>;
+    save: () => Promise<StudyTimerStatus & { saved: StudySavedTimer | null }>;
+    stop: () => Promise<StudyTimerStatus>;
+    resumeSaved: (payload: { savedTimerId: string }) => Promise<StudyTimerStatus>;
+    deleteSaved: (payload: { savedTimerId: string }) => Promise<StudyTimerStatus>;
+    savedList: () => Promise<StudySavedTimer[]>;
+    complete: () => Promise<StudyTimerStatus & { completed: StudyTimerCompletion | null }>;
+    status: () => Promise<StudyTimerStatus>;
+  };
   summary: {
     get: () => Promise<NotificationSummaryPayload>;
   };
   window: {
     setDesktopPinned: (pinned: boolean) => Promise<{ pinned: boolean }>;
+    getBounds: () => Promise<WindowBounds | null>;
+    resize: (payload: { width: number; height: number }) => Promise<WindowBounds | null>;
   };
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => () => void;
+  };
+  openclaw: {
+    chat: (payload: { message: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<{ ok: true; content: string } | { ok: false; error: string }>;
+    createEvent: (payload: { message: string; calendarId?: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<
+      | { ok: true; content: string; created: { eventId: string; title: string; startsAt: string; endsAt: string; allDay: boolean } | null }
+      | { ok: false; error: string }
+    >;
+  };
+  tasks: {
+    byDate: (payload: { dateIso: string }) => Promise<GoogleTaskItem[]>;
+    today: () => Promise<GoogleTaskItem[]>;
+    complete: (payload: { taskListId: string; taskId: string; completed?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
+    create: (payload: { title: string; dateIso: string; taskListId?: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
+    delete: (payload: { taskListId: string; taskId: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
   };
 };

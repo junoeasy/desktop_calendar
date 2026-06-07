@@ -3,6 +3,10 @@ import { IPC_CHANNELS, NOTIFICATION_EVENTS } from "../../shared/ipc";
 import type { NotificationSummaryPayload } from "../../shared/apiTypes";
 
 const api = {
+  app: {
+    version: () => ipcRenderer.invoke(IPC_CHANNELS.appVersion),
+    checkUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.appCheckUpdates)
+  },
   auth: {
     signIn: () => ipcRenderer.invoke(IPC_CHANNELS.authSignIn),
     signOut: () => ipcRenderer.invoke(IPC_CHANNELS.authSignOut),
@@ -28,11 +32,36 @@ const api = {
     now: (payload?: unknown) => ipcRenderer.invoke(IPC_CHANNELS.syncNow, payload ?? {}),
     status: () => ipcRenderer.invoke(IPC_CHANNELS.syncStatus)
   },
+  timer: {
+    start: (payload?: unknown) => ipcRenderer.invoke(IPC_CHANNELS.timerStart, payload ?? {}),
+    pause: () => ipcRenderer.invoke(IPC_CHANNELS.timerPause),
+    resume: () => ipcRenderer.invoke(IPC_CHANNELS.timerResume),
+    save: () => ipcRenderer.invoke(IPC_CHANNELS.timerSave),
+    stop: () => ipcRenderer.invoke(IPC_CHANNELS.timerStop),
+    resumeSaved: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.timerResumeSaved, payload),
+    deleteSaved: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.timerDeleteSaved, payload),
+    savedList: () => ipcRenderer.invoke(IPC_CHANNELS.timerSavedList),
+    complete: () => ipcRenderer.invoke(IPC_CHANNELS.timerComplete),
+    status: () => ipcRenderer.invoke(IPC_CHANNELS.timerStatus)
+  },
   summary: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.summaryGet)
   },
   window: {
-    setDesktopPinned: (pinned: boolean) => ipcRenderer.invoke(IPC_CHANNELS.desktopPinned, pinned)
+    setDesktopPinned: (pinned: boolean) => ipcRenderer.invoke(IPC_CHANNELS.desktopPinned, pinned),
+    getBounds: () => ipcRenderer.invoke(IPC_CHANNELS.windowGetBounds),
+    resize: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.windowResize, payload)
+  },
+  openclaw: {
+    chat: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawChat, payload),
+    createEvent: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawCreateEvent, payload)
+  },
+  tasks: {
+    byDate: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.tasksByDate, payload),
+    today: () => ipcRenderer.invoke(IPC_CHANNELS.tasksToday),
+    complete: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.taskComplete, payload),
+    create: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.taskCreate, payload),
+    delete: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.taskDelete, payload)
   },
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => {
