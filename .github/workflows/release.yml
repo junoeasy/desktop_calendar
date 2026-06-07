@@ -141,13 +141,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
+          npm run build
+
           if [ "$MACOS_SIGNING_MODE" = "signed" ]; then
-            npm run dist:mac:arm64
-            npm run dist:mac:x64
+            npx electron-builder --mac dmg zip --arm64 --publish never
+            npx electron-builder --mac dmg zip --x64 --publish never
           else
-            npm run build
-            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --arm64 -c.mac.notarize=false -c.mac.hardenedRuntime=false
-            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --x64 -c.mac.notarize=false -c.mac.hardenedRuntime=false
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --arm64 --publish never -c.mac.notarize=false -c.mac.hardenedRuntime=false
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --x64 --publish never -c.mac.notarize=false -c.mac.hardenedRuntime=false
           fi
 
           version="${GITHUB_REF_NAME#v}"
