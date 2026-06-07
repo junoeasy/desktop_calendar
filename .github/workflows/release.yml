@@ -88,18 +88,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate macOS signing secrets
+      - name: Detect macOS signing secrets
         shell: bash
         run: |
           missing=0
           for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
             if [ -z "${!name}" ]; then
-              echo "::error::$name is required for signed and notarized macOS releases."
+              echo "::warning::$name is not set; macOS artifacts will be unsigned and not notarized."
               missing=1
             fi
           done
-          if [ "$missing" -ne 0 ]; then
-            exit 1
+          if [ "$missing" -eq 0 ]; then
+            echo "MACOS_SIGNING_MODE=signed" >> "$GITHUB_ENV"
+          else
+            echo "MACOS_SIGNING_MODE=unsigned" >> "$GITHUB_ENV"
           fi
 
       - name: Create app config from secrets
@@ -139,8 +141,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          npm run dist:mac:arm64
-          npm run dist:mac:x64
+          if [ "$MACOS_SIGNING_MODE" = "signed" ]; then
+            npm run dist:mac:arm64
+            npm run dist:mac:x64
+          else
+            npm run build
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --arm64 -c.mac.notarize=false -c.mac.hardenedRuntime=false
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --x64 -c.mac.notarize=false -c.mac.hardenedRuntime=false
+          fi
 
           version="${GITHUB_REF_NAME#v}"
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \

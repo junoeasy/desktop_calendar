@@ -4,7 +4,7 @@ macOS Gatekeeper warning can only be removed by signing the app with an Apple De
 
 ## Required GitHub Secrets
 
-Add these repository secrets before publishing a macOS release:
+Add these repository secrets before publishing a signed and notarized macOS release:
 
 - `MACOS_CSC_LINK`: base64 encoded `.p12` certificate exported from Keychain Access
 - `MACOS_CSC_KEY_PASSWORD`: password used when exporting the `.p12`
@@ -30,6 +30,8 @@ Paste the copied value into `MACOS_CSC_LINK`.
 Create an app-specific password for the Apple ID and store it as `APPLE_APP_SPECIFIC_PASSWORD`.
 
 ## Release
+
+If these secrets are missing, the release workflow still builds macOS artifacts, but they are unsigned and not notarized. Unsigned builds can still show the Gatekeeper warning.
 
 After all secrets are configured, publish a tag:
 

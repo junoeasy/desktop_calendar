@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { google } from "googleapis";
 import { getGoogleClient } from "./googleAuth";
-import { localDateFromIso, localDayBoundsToUtc } from "@shared/dateTime";
+import { localDateFromIso, localDayBoundsToUtc } from "../../shared/dateTime";
 
 type GoogleTaskItem = {
   id: string;

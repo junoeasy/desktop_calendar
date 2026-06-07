@@ -2,8 +2,8 @@ import { google } from "googleapis";
 import dayjs from "dayjs";
 import { calendarRepository, eventRepository, syncRepository } from "./repositories";
 import { getGoogleClient } from "./googleAuth";
-import type { EventEntity } from "@shared/models";
-import { addDaysToDateIso, localDateFromIso, localDayBoundsToUtc } from "@shared/dateTime";
+import { addDaysToDateIso, localDateFromIso, localDayBoundsToUtc } from "../../shared/dateTime";
+import type { EventEntity } from "../../shared/models";
 
 export type SyncStatus = {
   running: boolean;
