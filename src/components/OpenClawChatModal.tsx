@@ -104,26 +104,28 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: P
     setMessages(nextMessages);
     setLoading(true);
 
-    const result = await window.desktopCalApi.openclaw.parseEvent({
-      message: text,
-      history: messages
-    });
+    try {
+      const result = await window.desktopCalApi.openclaw.parseEvent({
+        message: text
+      });
 
-    if (!result.ok) {
-      setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      if (result.draft) {
+        setPendingDraft(result.draft);
+        setMessages((prev) => [...prev, { role: "assistant", content: `${result.draft.title} 일정을 추가할까요?` }]);
+      } else {
+        setMessages((prev) => [...prev, { role: "assistant", content: toDisplayReply(result.content) }]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
       setLoading(false);
       inFlightRef.current = false;
-      return;
     }
-
-    if (result.draft) {
-      setPendingDraft(result.draft);
-      setMessages((prev) => [...prev, { role: "assistant", content: `${result.draft.title} 일정을 추가할까요?` }]);
-    } else {
-      setMessages((prev) => [...prev, { role: "assistant", content: toDisplayReply(result.content) }]);
-    }
-    setLoading(false);
-    inFlightRef.current = false;
   };
 
   const onConfirmDraft = async () => {
@@ -154,6 +156,7 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: P
     if (loading) return;
     setMessages((prev) => [...prev, { role: "assistant", content: "등록하지 않았어요." }]);
     setPendingDraft(null);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const hasCalendars = calendars.length > 0;
