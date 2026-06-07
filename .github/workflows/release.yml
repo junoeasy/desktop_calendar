@@ -148,8 +148,8 @@ jobs:
             npx electron-builder --mac dmg zip --x64 --publish never
           else
             unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
-            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --arm64 --publish never -c.mac.identity=null -c.mac.notarize=false -c.mac.hardenedRuntime=false
-            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --x64 --publish never -c.mac.identity=null -c.mac.notarize=false -c.mac.hardenedRuntime=false
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --arm64 --publish never -c.mac.identity=- -c.mac.notarize=false -c.mac.hardenedRuntime=false
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --x64 --publish never -c.mac.identity=- -c.mac.notarize=false -c.mac.hardenedRuntime=false
           fi
 
           version="${GITHUB_REF_NAME#v}"

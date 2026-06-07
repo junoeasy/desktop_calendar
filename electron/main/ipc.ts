@@ -28,6 +28,7 @@ import { getSyncStatus, runSync, syncCalendarsFromGoogle } from "./syncEngine";
 import { buildQueuePayload } from "./queueMapper";
 import { completeStudyTimer, deleteSavedStudyTimer, getStudyTimerStatus, listSavedStudyTimers, pauseStudyTimer, resumeSavedStudyTimer, resumeStudyTimer, saveStudyTimer, startStudyTimer, stopStudyTimer } from "./studyTimer";
 import type { CalendarRow } from "../../shared/apiTypes";
+import type { OpenClawCreateEventInput } from "../../shared/ipc";
 import { completeGoogleTask, createGoogleTask, deleteGoogleTask, listGoogleTasksByDate, listTodayGoogleTasks } from "./googleTasks";
 import { checkForUpdatesManually } from "./updater";
 
@@ -446,6 +447,17 @@ type ParsedAiEvent = {
   calendarTitle?: string;
 };
 
+type AiEventDraft = {
+  calendarId: string;
+  calendarTitle: string | null;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+};
+
 type OpenClawSignalEnvelope = {
   reply?: string;
   signals?: Array<{ kind?: string; payload?: ParsedAiEvent }>;
@@ -592,6 +604,105 @@ function createLocalEvent(input: {
     void runSync(false);
   }
   return created;
+}
+
+async function parseAiEventDraft(input: OpenClawCreateEventInput) {
+  const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
+  const defaultCalendarId = pickDefaultCalendarId();
+  if (!defaultCalendarId) {
+    return { ok: false as const, error: "No calendar is available. Connect Google Calendar first." };
+  }
+  const availableCalendars = (calendarRepository.listAll() as CalendarRow[]).map((calendar) => ({
+    id: calendar.id,
+    title: calendar.title,
+    selected: calendar.selected === 1
+  }));
+
+  const now = new Date();
+  const prompt = [
+    "You are an event parser for a desktop calendar app.",
+    "Return ONLY one JSON object with this exact shape:",
+    '{ "title": string, "startsAt": string, "endsAt": string, "allDay": boolean, "description": string|null, "location": string|null, "calendarId": string|null, "calendarTitle": string|null }',
+    "Rules:",
+    "- startsAt/endsAt must be ISO8601 date-time strings.",
+    "- If allDay is true, still return ISO8601 values.",
+    "- Infer missing end time as 1 hour after start for timed events.",
+    "- Keep title concise.",
+    "- Calendar routing policy: resume/interview/job topics -> 취업 calendar, exam/study topics -> 공부 calendar, appointment/general plan topics -> 일정 calendar.",
+    "- Prefer the user-selected calendar context when available.",
+    `- User-selected calendarId from app: ${input.calendarId ?? "(none)"}.`,
+    `- Available calendars: ${JSON.stringify(availableCalendars)}.`,
+    `- Current time reference: ${now.toISOString()}.`
+  ].join("\n");
+  const ai = await requestAi([{ role: "system", content: prompt }, ...messages]);
+  if (!ai.ok) {
+    return ai;
+  }
+
+  const envelope = extractOpenClawEnvelope(ai.content);
+  let parsed: ParsedAiEvent | null = null;
+  let reply = "";
+  if (envelope) {
+    reply = typeof envelope.reply === "string" ? envelope.reply : "";
+    const createSignal = (envelope.signals ?? []).find((signal) => signal?.kind === "create_event" && signal.payload);
+    parsed = createSignal?.payload ?? null;
+  }
+
+  if (!parsed) {
+    const fallback = extractJsonBlock(ai.content);
+    if (fallback && fallback.title && fallback.startsAt) {
+      parsed = fallback;
+    }
+  }
+
+  if (!parsed) {
+    return {
+      ok: true as const,
+      content: reply || ai.content,
+      draft: null
+    };
+  }
+
+  const startsAt = dayjs(parsed.startsAt);
+  if (!startsAt.isValid()) {
+    return { ok: false as const, error: "Invalid start time returned by AI." };
+  }
+  const allDay = Boolean(parsed.allDay);
+  let endsAt = parsed.endsAt ? dayjs(parsed.endsAt) : startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
+  if (!endsAt.isValid() || endsAt.isBefore(startsAt)) {
+    endsAt = startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
+  }
+
+  const resolvedCalendarId = resolveCalendarId(input.calendarId, parsed, input.message);
+  if (!resolvedCalendarId) {
+    return { ok: false as const, error: "Could not resolve target calendar." };
+  }
+  const calendarTitle = (calendarRepository.listAll() as CalendarRow[]).find((calendar) => calendar.id === resolvedCalendarId)?.title ?? null;
+  const payloadForCreate = {
+    calendarId: resolvedCalendarId,
+    title: String(parsed.title).trim().slice(0, 150),
+    description: typeof parsed.description === "string" ? parsed.description.slice(0, 2000) : null,
+    location: typeof parsed.location === "string" ? parsed.location.slice(0, 255) : null,
+    startsAt: allDay ? localDayBoundsToUtc(localDateFromIso(startsAt.toISOString())).start : startsAt.toISOString(),
+    endsAt: allDay ? localDayBoundsToUtc(localDateFromIso(endsAt.toISOString())).end : endsAt.toISOString(),
+    allDay
+  };
+  const validated = eventUpsertSchema.parse(payloadForCreate);
+  const draft: AiEventDraft = {
+    calendarId: validated.calendarId,
+    calendarTitle,
+    title: validated.title,
+    description: validated.description ?? null,
+    location: validated.location ?? null,
+    startsAt: validated.startsAt,
+    endsAt: validated.endsAt,
+    allDay: validated.allDay
+  };
+  return {
+    ok: true as const,
+    content: reply || `${draft.title} 일정을 추가할까요?`,
+    draft
+  };
 }
 
 type RegisterIpcOptions = {
@@ -839,109 +950,41 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     return requestAi(messages);
   });
 
+  ipcMain.handle(IPC_CHANNELS.openClawParseEvent, async (_event, payload: unknown) => {
+    const input = openClawCreateEventSchema.parse(payload);
+    return parseAiEventDraft(input);
+  });
+
   ipcMain.handle(IPC_CHANNELS.openClawCreateEvent, async (_event, payload: unknown) => {
     const input = openClawCreateEventSchema.parse(payload);
-    const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
-    const defaultCalendarId = pickDefaultCalendarId();
-    if (!defaultCalendarId) {
-      return { ok: false, error: "No calendar is available. Connect Google Calendar first." };
+    const parsed = await parseAiEventDraft(input);
+    if (!parsed.ok) {
+      return parsed;
     }
-    const availableCalendars = (calendarRepository.listAll() as CalendarRow[]).map((calendar) => ({
-      id: calendar.id,
-      title: calendar.title,
-      selected: calendar.selected === 1
-    }));
-
-    const now = new Date();
-    const prompt = [
-      "You are an event parser for a desktop calendar app.",
-      "Return ONLY one JSON object with this exact shape:",
-      '{ "title": string, "startsAt": string, "endsAt": string, "allDay": boolean, "description": string|null, "location": string|null, "calendarId": string|null, "calendarTitle": string|null }',
-      "Rules:",
-      "- startsAt/endsAt must be ISO8601 date-time strings.",
-      "- If allDay is true, still return ISO8601 values.",
-      "- Infer missing end time as 1 hour after start for timed events.",
-      "- Keep title concise.",
-      "- Calendar routing policy: resume/interview/job topics -> 취업 calendar, exam/study topics -> 공부 calendar, appointment/general plan topics -> 일정 calendar.",
-      "- Prefer the user-selected calendar context when available.",
-      `- User-selected calendarId from app: ${input.calendarId ?? "(none)"}.`,
-      `- Available calendars: ${JSON.stringify(availableCalendars)}.`,
-      `- Current time reference: ${now.toISOString()}.`
-    ].join("\n");
-    const ai = await requestAi([{ role: "system", content: prompt }, ...messages]);
-    if (!ai.ok) {
-      return ai;
-    }
-
-    const envelope = extractOpenClawEnvelope(ai.content);
-    let parsed: ParsedAiEvent | null = null;
-    let reply = "";
-    if (envelope) {
-      reply = typeof envelope.reply === "string" ? envelope.reply : "";
-      const createSignal = (envelope.signals ?? []).find((signal) => signal?.kind === "create_event" && signal.payload);
-      parsed = createSignal?.payload ?? null;
-    }
-
-    if (!parsed) {
-      const fallback = extractJsonBlock(ai.content);
-      if (fallback && fallback.title && fallback.startsAt) {
-        parsed = fallback;
-      }
-    }
-
-    if (!parsed) {
+    if (!parsed.draft) {
       return {
         ok: true,
-        content: reply || ai.content,
+        content: parsed.content,
         created: null
       };
     }
-
-    const startsAt = dayjs(parsed.startsAt);
-    if (!startsAt.isValid()) {
-      return { ok: false, error: "Invalid start time returned by AI." };
-    }
-    const allDay = Boolean(parsed.allDay);
-    let endsAt = parsed.endsAt ? dayjs(parsed.endsAt) : startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
-    if (!endsAt.isValid() || endsAt.isBefore(startsAt)) {
-      endsAt = startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
-    }
-
-    const resolvedCalendarId = resolveCalendarId(input.calendarId, parsed, input.message);
-    if (!resolvedCalendarId) {
-      return { ok: false, error: "Could not resolve target calendar." };
-    }
-
-    const payloadForCreate = {
-      calendarId: resolvedCalendarId,
-      title: String(parsed.title).trim().slice(0, 150),
-      description: typeof parsed.description === "string" ? parsed.description.slice(0, 2000) : null,
-      location: typeof parsed.location === "string" ? parsed.location.slice(0, 255) : null,
-      startsAt: allDay ? localDayBoundsToUtc(localDateFromIso(startsAt.toISOString())).start : startsAt.toISOString(),
-      endsAt: allDay ? localDayBoundsToUtc(localDateFromIso(endsAt.toISOString())).end : endsAt.toISOString(),
-      allDay
-    };
-    const validated = eventUpsertSchema.parse(payloadForCreate);
     const created = createLocalEvent({
-      calendarId: validated.calendarId,
-      title: validated.title,
-      description: validated.description ?? null,
-      location: validated.location ?? null,
-      startsAt: validated.startsAt,
-      endsAt: validated.endsAt,
-      allDay: validated.allDay
+      calendarId: parsed.draft.calendarId,
+      title: parsed.draft.title,
+      description: parsed.draft.description,
+      location: parsed.draft.location,
+      startsAt: parsed.draft.startsAt,
+      endsAt: parsed.draft.endsAt,
+      allDay: parsed.draft.allDay
     });
     if (!created) {
       return { ok: false, error: "Failed to create event in local database." };
     }
 
     const when = created.allDay ? dayjs(created.startsAt).format("M/D 하루 종일") : dayjs(created.startsAt).format("M/D HH:mm");
-    const targetCalendarTitle =
-      availableCalendars.find((calendar) => calendar.id === validated.calendarId)?.title ??
-      (calendarRepository.listAll() as CalendarRow[]).find((calendar) => calendar.id === validated.calendarId)?.title ??
-      "기본 캘린더";
+    const targetCalendarTitle = parsed.draft.calendarTitle ?? "기본 캘린더";
     const calendarSuffix = ` (캘린더: ${targetCalendarTitle})`;
-    const contentWithCalendar = reply ? `${reply}${calendarSuffix}` : `일정을 등록했어요: ${created.title} (${when})${calendarSuffix}`;
+    const contentWithCalendar = `일정을 등록했어요: ${created.title} (${when})${calendarSuffix}`;
     return {
       ok: true,
       content: contentWithCalendar,

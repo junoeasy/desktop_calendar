@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/lib/store";
 
+const BACKGROUND_REFETCH_INTERVAL_MS = 60 * 1000;
+
 export function useSettings() {
   const setSettings = useAppStore((s) => s.setSettings);
   return useQuery({
@@ -19,7 +21,7 @@ export function useMonthEvents() {
   return useQuery({
     queryKey: ["month-events", year, month],
     queryFn: () => window.desktopCalApi.events.month({ year, month }),
-    refetchInterval: 15000,
+    refetchInterval: BACKGROUND_REFETCH_INTERVAL_MS,
     refetchOnWindowFocus: true
   });
 }
@@ -29,7 +31,7 @@ export function useDayEvents() {
   return useQuery({
     queryKey: ["day-events", selectedDate],
     queryFn: () => window.desktopCalApi.events.day(selectedDate),
-    refetchInterval: 15000,
+    refetchInterval: BACKGROUND_REFETCH_INTERVAL_MS,
     refetchOnWindowFocus: true
   });
 }

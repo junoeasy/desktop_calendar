@@ -1,6 +1,5 @@
 import dayjs from "dayjs";
-import { google } from "googleapis";
-import { getGoogleClient } from "./googleAuth";
+import { getGoogleApi, getGoogleClient } from "./googleAuth";
 import { localDateFromIso, localDayBoundsToUtc } from "../../shared/dateTime";
 
 type GoogleTaskItem = {
@@ -17,6 +16,7 @@ type GoogleTaskItem = {
 function createTasksApi() {
   const client = getGoogleClient();
   if (!client) return null;
+  const google = getGoogleApi();
   return google.tasks({ version: "v1", auth: client });
 }
 

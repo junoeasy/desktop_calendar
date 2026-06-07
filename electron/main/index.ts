@@ -22,6 +22,8 @@ const WINDOW_MIN_WIDTH = 856;
 const WINDOW_MIN_HEIGHT = 804;
 const WINDOW_MAX_WIDTH = 10000;
 const WINDOW_MAX_HEIGHT = 10000;
+const REALTIME_SYNC_INTERVAL_MS = 60 * 1000;
+const STARTUP_BACKGROUND_DELAY_MS = 1500;
 
 const reminderStore = new Store<{ notifiedReminderKeys: Record<string, string> }>({
   name: "reminder-state",
@@ -161,12 +163,20 @@ function configureRealtimeSyncTimer() {
   }
   realtimeSyncTimer = setInterval(() => {
     runSync(false).catch((err: unknown) => console.error("[sync] Realtime sync failed:", err));
-  }, 20 * 1000);
+  }, REALTIME_SYNC_INTERVAL_MS);
 }
 
 function applyRuntimeSettings() {
   configureAutoLaunch();
   configureSyncTimer();
+}
+
+function runStartupBackgroundWork() {
+  setTimeout(() => {
+    runSync(false).catch((err: unknown) => console.error("[sync] Startup sync failed:", err));
+    sendWeeklyDigestNotification();
+    runDayBeforeReminderCheck();
+  }, STARTUP_BACKGROUND_DELAY_MS);
 }
 
 async function bootstrap() {
@@ -188,9 +198,7 @@ async function bootstrap() {
   configureReminderTimer();
   configureAutoUpdater(mainWindow);
 
-  await runSync(false);
-  sendWeeklyDigestNotification();
-  runDayBeforeReminderCheck();
+  runStartupBackgroundWork();
 
   mainWindow.on("close", (event) => {
     const nextSettings = settingsRepository.get();

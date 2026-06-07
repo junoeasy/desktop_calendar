@@ -170,6 +170,7 @@ export const IPC_CHANNELS = {
   aiConfigUpdate: "ai:config-update",
   aiConfigTest: "ai:config-test",
   openClawChat: "openclaw:chat",
+  openClawParseEvent: "openclaw:event-parse",
   openClawCreateEvent: "openclaw:event-create",
   tasksByDate: "tasks:by-date",
   tasksToday: "tasks:today",

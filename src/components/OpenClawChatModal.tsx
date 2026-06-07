@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CalendarRow } from "@shared/apiTypes";
+import type { AiEventDraft, CalendarRow } from "@shared/apiTypes";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -9,6 +9,7 @@ type ChatMessage = {
 type Props = {
   open: boolean;
   calendars: CalendarRow[];
+  onCreateEvent: (payload: AiEventDraft) => Promise<{ title: string }>;
   onClose: () => void;
 };
 
@@ -28,17 +29,44 @@ function toDisplayReply(text: string) {
   return text;
 }
 
-export function OpenClawChatModal({ open, calendars, onClose }: Props) {
+function formatDraftWhen(draft: AiEventDraft) {
+  const start = new Date(draft.startsAt);
+  const end = new Date(draft.endsAt);
+  if (Number.isNaN(start.getTime())) {
+    return draft.startsAt;
+  }
+  if (draft.allDay) {
+    return `${start.toLocaleDateString("ko-KR")} 하루 종일`;
+  }
+  const startText = start.toLocaleString("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+  const endText = Number.isNaN(end.getTime())
+    ? ""
+    : end.toLocaleTimeString("ko-KR", {
+        hour: "numeric",
+        minute: "2-digit"
+      });
+  return endText ? `${startText} - ${endText}` : startText;
+}
+
+export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [pendingDraft, setPendingDraft] = useState<AiEventDraft | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
     setError("");
+    setPendingDraft(null);
   }, [open]);
 
   useEffect(() => {
@@ -60,21 +88,23 @@ export function OpenClawChatModal({ open, calendars, onClose }: Props) {
     return () => window.clearTimeout(timerId);
   }, [open]);
 
-  const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
+  const canSend = useMemo(() => input.trim().length > 0 && !loading && !pendingDraft, [input, loading, pendingDraft]);
 
   if (!open) return null;
 
   const onSend = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || pendingDraft || inFlightRef.current) return;
 
+    inFlightRef.current = true;
     setInput("");
     setError("");
+    setPendingDraft(null);
     const nextMessages = [...messages, { role: "user" as const, content: text }];
     setMessages(nextMessages);
     setLoading(true);
 
-    const result = await window.desktopCalApi.openclaw.createEvent({
+    const result = await window.desktopCalApi.openclaw.parseEvent({
       message: text,
       history: messages
     });
@@ -82,11 +112,48 @@ export function OpenClawChatModal({ open, calendars, onClose }: Props) {
     if (!result.ok) {
       setError(result.error);
       setLoading(false);
+      inFlightRef.current = false;
       return;
     }
 
-    setMessages((prev) => [...prev, { role: "assistant", content: toDisplayReply(result.content) }]);
+    if (result.draft) {
+      setPendingDraft(result.draft);
+      setMessages((prev) => [...prev, { role: "assistant", content: `${result.draft.title} 일정을 추가할까요?` }]);
+    } else {
+      setMessages((prev) => [...prev, { role: "assistant", content: toDisplayReply(result.content) }]);
+    }
     setLoading(false);
+    inFlightRef.current = false;
+  };
+
+  const onConfirmDraft = async () => {
+    if (!pendingDraft || loading || inFlightRef.current) return;
+
+    inFlightRef.current = true;
+    setLoading(true);
+    setError("");
+    try {
+      const created = await onCreateEvent(pendingDraft);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `등록했어요: ${created.title}`
+        }
+      ]);
+      setPendingDraft(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+      inFlightRef.current = false;
+    }
+  };
+
+  const onRejectDraft = () => {
+    if (loading) return;
+    setMessages((prev) => [...prev, { role: "assistant", content: "등록하지 않았어요." }]);
+    setPendingDraft(null);
   };
 
   const hasCalendars = calendars.length > 0;
@@ -122,6 +189,35 @@ export function OpenClawChatModal({ open, calendars, onClose }: Props) {
             </div>
           ))}
           {loading && <div className="mr-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">응답 생성 중...</div>}
+          {pendingDraft && (
+            <div className="mr-auto w-full max-w-[92%] rounded-lg border border-accent/30 bg-accent/5 px-3 py-3 text-sm text-slate-800">
+              <div className="mb-2 font-semibold">이 일정으로 추가할까요?</div>
+              <div className="space-y-1 text-xs">
+                <div><span className="font-medium text-slate-600">제목</span> {pendingDraft.title}</div>
+                <div><span className="font-medium text-slate-600">시간</span> {formatDraftWhen(pendingDraft)}</div>
+                <div><span className="font-medium text-slate-600">분류</span> {pendingDraft.calendarTitle ?? "기본 캘린더"}</div>
+                {pendingDraft.location && <div><span className="font-medium text-slate-600">장소</span> {pendingDraft.location}</div>}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm disabled:opacity-60"
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void onConfirmDraft()}
+                >
+                  네
+                </button>
+                <button
+                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  type="button"
+                  disabled={loading}
+                  onClick={onRejectDraft}
+                >
+                  아니요
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="border-t border-slate-200 px-3 py-2">

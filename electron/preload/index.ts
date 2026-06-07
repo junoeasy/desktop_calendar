@@ -54,6 +54,7 @@ const api = {
   },
   openclaw: {
     chat: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawChat, payload),
+    parseEvent: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawParseEvent, payload),
     createEvent: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.openClawCreateEvent, payload)
   },
   tasks: {

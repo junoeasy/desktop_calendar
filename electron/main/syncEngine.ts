@@ -1,7 +1,6 @@
-import { google } from "googleapis";
 import dayjs from "dayjs";
 import { calendarRepository, eventRepository, syncRepository } from "./repositories";
-import { getGoogleClient } from "./googleAuth";
+import { getGoogleApi, getGoogleClient } from "./googleAuth";
 import { addDaysToDateIso, localDateFromIso, localDayBoundsToUtc } from "../../shared/dateTime";
 import type { EventEntity } from "../../shared/models";
 
@@ -24,6 +23,7 @@ function selectedCalendars() {
 export async function syncCalendarsFromGoogle(userId: string) {
   const client = getGoogleClient();
   if (!client) return [];
+  const google = getGoogleApi();
   const api = google.calendar({ version: "v3", auth: client });
   const resp = await api.calendarList.list({ maxResults: 250 });
   const calendars =
@@ -64,6 +64,7 @@ async function pullFromGoogle() {
   if (!client) {
     return;
   }
+  const google = getGoogleApi();
   const api = google.calendar({ version: "v3", auth: client });
   for (const cal of selectedCalendars()) {
     let syncToken = syncRepository.getSyncToken(cal.provider_calendar_id);
@@ -144,6 +145,7 @@ async function pushQueue() {
   if (!client) {
     return;
   }
+  const google = getGoogleApi();
   const api = google.calendar({ version: "v3", auth: client });
   const queue = syncRepository.listReady(50);
   for (const item of queue) {

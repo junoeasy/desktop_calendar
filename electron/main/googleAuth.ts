@@ -1,12 +1,15 @@
 ﻿import http from "node:http";
 import { exec } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import { createRequire } from "node:module";
 import { URL } from "node:url";
 import { shell } from "electron";
 import Store from "electron-store";
-import { google } from "googleapis";
-import { CodeChallengeMethod } from "google-auth-library";
 import { loadPublicAppConfig } from "./appConfig";
+import type { google as GoogleApi } from "googleapis";
+import type { CodeChallengeMethod } from "google-auth-library";
+
+type GoogleClient = InstanceType<typeof GoogleApi.auth.OAuth2>;
 
 type TokenStore = {
   get: (key: "googleTokens") => Record<string, unknown> | undefined;
@@ -15,6 +18,8 @@ type TokenStore = {
 };
 
 const tokenStore = new Store({ name: "secure-tokens" }) as unknown as TokenStore;
+const nodeRequire = createRequire(__filename);
+let cachedGoogleApi: typeof GoogleApi | null = null;
 
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar",
@@ -42,9 +47,17 @@ function getGoogleConfig() {
   return { clientId, clientSecret, redirectPort };
 }
 
+export function getGoogleApi() {
+  if (!cachedGoogleApi) {
+    cachedGoogleApi = (nodeRequire("googleapis") as typeof import("googleapis")).google;
+  }
+  return cachedGoogleApi;
+}
+
 function createClient() {
   const { clientId, clientSecret, redirectPort } = getGoogleConfig();
   const redirect = `http://127.0.0.1:${redirectPort}/oauth2callback`;
+  const google = getGoogleApi();
   const client = new google.auth.OAuth2(clientId, clientSecret, redirect);
   const tokens = tokenStore.get("googleTokens");
   if (tokens) {
@@ -103,7 +116,10 @@ function openExternalWithFallback(url: string) {
       .openExternal(url, { activate: true })
       .then(() => resolve())
       .catch(() => {
-        exec(`start "" "${url.replace(/"/g, '\\"')}"`, { shell: "cmd.exe" }, (error) => {
+        const escapedUrl = url.replace(/"/g, '\\"');
+        const command = process.platform === "darwin" ? `open "${escapedUrl}"` : process.platform === "win32" ? `start "" "${escapedUrl}"` : `xdg-open "${escapedUrl}"`;
+        const options = process.platform === "win32" ? { shell: "cmd.exe" } : undefined;
+        exec(command, options, (error) => {
           if (error) {
             reject(new Error("Could not open browser. Check your default browser settings."));
             return;
@@ -114,7 +130,7 @@ function openExternalWithFallback(url: string) {
   });
 }
 
-let cachedGoogleClient: ReturnType<typeof createClient> | null = null;
+let cachedGoogleClient: GoogleClient | null = null;
 
 export async function signInWithGoogle() {
   cachedGoogleClient = null;
@@ -126,7 +142,7 @@ export async function signInWithGoogle() {
     access_type: "offline",
     prompt: "consent",
     scope: SCOPES,
-    code_challenge_method: CodeChallengeMethod.S256,
+    code_challenge_method: "S256" as CodeChallengeMethod,
     code_challenge: codeChallenge
   });
 
@@ -142,6 +158,7 @@ export async function signInWithGoogle() {
   tokenStore.set("googleTokens", tokens as unknown as Record<string, unknown>);
   client.setCredentials(tokens);
 
+  const google = getGoogleApi();
   const oauth2 = google.oauth2({ version: "v2", auth: client });
   const profile = await oauth2.userinfo.get();
   return {

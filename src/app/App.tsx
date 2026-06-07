@@ -161,7 +161,7 @@ export function App() {
         const status = await window.desktopCalApi.sync.status();
         setSyncStatus(status);
       })();
-    }, 10000);
+    }, 30000);
     return () => clearInterval(timer);
   }, []);
 
@@ -949,7 +949,7 @@ export function App() {
         }}
       />
 
-      <OpenClawChatModal open={openClawChatOpen} calendars={calendars} onClose={() => setOpenClawChatOpen(false)} />
+      <OpenClawChatModal open={openClawChatOpen} calendars={calendars} onCreateEvent={(payload) => createEvent.mutateAsync(payload)} onClose={() => setOpenClawChatOpen(false)} />
 
       {settings && !settings.desktopPinned && (
         <div className="app-no-drag fixed bottom-2 right-2 z-[90] flex items-center gap-1">
@@ -982,4 +982,3 @@ export function App() {
     </div>
   );
 }
-
