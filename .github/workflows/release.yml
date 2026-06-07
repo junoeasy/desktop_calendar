@@ -164,6 +164,38 @@ jobs:
           cp "release/DesktopCal Sync-${version}.dmg.blockmap" "release/DesktopCal-Sync-${version}.dmg.blockmap"
           cp "release/DesktopCal Sync-${version}-mac.zip" "release/DesktopCal-Sync-${version}-mac.zip"
           cp "release/DesktopCal Sync-${version}-mac.zip.blockmap" "release/DesktopCal-Sync-${version}-mac.zip.blockmap"
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const crypto = require("node:crypto");
+
+          const version = process.env.GITHUB_REF_NAME.replace(/^v/, "");
+          const files = [
+            `DesktopCal-Sync-${version}-arm64-mac.zip`,
+            `DesktopCal-Sync-${version}-mac.zip`
+          ];
+          const entries = files.map((name) => {
+            const path = `release/${name}`;
+            return {
+              name,
+              size: fs.statSync(path).size,
+              sha512: crypto.createHash("sha512").update(fs.readFileSync(path)).digest("base64")
+            };
+          });
+          const lines = [
+            `version: ${version}`,
+            "files:",
+            ...entries.flatMap((entry) => [
+              `  - url: ${entry.name}`,
+              `    sha512: ${entry.sha512}`,
+              `    size: ${entry.size}`
+            ]),
+            `path: ${entries[0].name}`,
+            `sha512: ${entries[0].sha512}`,
+            `releaseDate: '${new Date().toISOString()}'`,
+            ""
+          ];
+          fs.writeFileSync("release/latest-mac.yml", lines.join("\n"));
+          NODE
 
           gh release upload "$GITHUB_REF_NAME" \
             "release/DesktopCal-Sync-${version}-arm64.dmg" \
@@ -174,4 +206,5 @@ jobs:
             "release/DesktopCal-Sync-${version}.dmg.blockmap" \
             "release/DesktopCal-Sync-${version}-mac.zip" \
             "release/DesktopCal-Sync-${version}-mac.zip.blockmap" \
+            "release/latest-mac.yml" \
             --clobber
