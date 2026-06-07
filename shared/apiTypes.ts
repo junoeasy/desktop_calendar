@@ -109,6 +109,15 @@ export type AppUpdateCheckResult =
   | { ok: true; status: "available" | "none"; message: string; version?: string }
   | { ok: false; status: "unsupported" | "checking" | "error"; message: string };
 
+export type AiProvider = "nvidia" | "openai" | "custom";
+
+export type AiConfigPublic = {
+  provider: AiProvider;
+  chatUrl: string;
+  model: string;
+  hasApiKey: boolean;
+};
+
 export type DesktopCalBridge = {
   app: {
     version: () => Promise<string>;
@@ -161,6 +170,11 @@ export type DesktopCalBridge = {
   };
   notifications: {
     onOpenSummary: (callback: (payload: NotificationSummaryPayload) => void) => () => void;
+  };
+  ai: {
+    getConfig: () => Promise<AiConfigPublic>;
+    updateConfig: (patch: Partial<AiConfigPublic> & { apiKey?: string }) => Promise<AiConfigPublic>;
+    testConfig: () => Promise<{ ok: true; content: string } | { ok: false; error: string }>;
   };
   openclaw: {
     chat: (payload: { message: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<{ ok: true; content: string } | { ok: false; error: string }>;

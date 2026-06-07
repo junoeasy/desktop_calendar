@@ -71,6 +71,11 @@ const api = {
         ipcRenderer.off(NOTIFICATION_EVENTS.openSummary, handler);
       };
     }
+  },
+  ai: {
+    getConfig: () => ipcRenderer.invoke(IPC_CHANNELS.aiConfigGet),
+    updateConfig: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.aiConfigUpdate, payload),
+    testConfig: () => ipcRenderer.invoke(IPC_CHANNELS.aiConfigTest)
   }
 };
 

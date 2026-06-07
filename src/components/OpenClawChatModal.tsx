@@ -103,14 +103,14 @@ export function OpenClawChatModal({ open, calendars, onClose }: Props) {
     >
       <div className="flex h-[72vh] w-full max-w-[760px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-          <h3 className="text-sm font-semibold text-slate-800">OpenClaw 일정 추가</h3>
+          <h3 className="text-sm font-semibold text-slate-800">AI 일정 추가</h3>
           <button className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50" onClick={onClose}>
             닫기
           </button>
         </div>
 
         <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
-          {messages.length === 0 && <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">자연어로 입력하면 OpenClaw가 해석합니다. Shift+Enter로 줄바꿈할 수 있습니다.</div>}
+          {messages.length === 0 && <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">자연어로 입력하면 AI가 해석합니다. Shift+Enter로 줄바꿈할 수 있습니다.</div>}
           {messages.map((message, index) => (
             <div
               key={`${message.role}-${index}`}

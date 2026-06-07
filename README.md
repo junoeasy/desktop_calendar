@@ -8,7 +8,9 @@ Windows/macOS 데스크톱 스타일 캘린더 앱입니다.
 - 월간 캘린더 + 날짜별 일정 보기
 - 일정 CRUD (생성/수정/삭제)
 - Google OAuth 로그인 및 동기화
-- OpenClaw 연동 자연어 일정 등록
+- AI 연동 자연어 일정 등록
+  - NVIDIA NIM, OpenAI GPT, OpenClaw 호환 엔드포인트 지원
+  - 앱 설정 화면에서 API Key/모델/Chat URL 저장
   - `reply + signals(create_event)` 응답 처리
   - 캘린더 자동 분류(취업/공부/일정)
 - 코딩테스트 타이머
@@ -100,9 +102,19 @@ Google OAuth의 공통 `client_id`는 `config/app.public.json`에서 관리합�
 
 ## 환경 변수
 
-루트에 `.env` 파일을 생성해 설정합니다. (개발/운영 환경 값)
+일반 사용자는 앱의 설정 화면에서 AI 제공자, API Key, 모델, Chat URL을 저장하면 됩니다. NVIDIA NIM 기본값은 아래와 같습니다.
+
+- Chat URL: `https://integrate.api.nvidia.com/v1/chat/completions`
+- Model: `openai/gpt-oss-120b`
+
+개발/운영 환경에서는 루트에 `.env` 파일을 생성해 fallback 값을 설정할 수 있습니다.
 
 ```env
+# OpenAI-compatible event parser
+OPENAI_API_KEY=sk-or-nvapi-your-api-key
+OPENAI_MODEL=openai/gpt-oss-120b
+OPENAI_CHAT_URL=https://integrate.api.nvidia.com/v1/chat/completions
+
 # OpenClaw endpoint (개발/로컬 테스트용)
 OPENCLAW_CHAT_URL=http://your-openclaw-endpoint
 OPENCLAW_MODEL=openclaw:main
@@ -110,6 +122,12 @@ OPENCLAW_MODEL=openclaw:main
 # Auto update (개발/로컬 테스트용)
 AUTO_UPDATE_URL=
 ```
+
+설치된 앱에서는 `.env` 대신 설정 화면을 권장합니다. Windows에서 `.env` fallback을 쓸 때는 아래 위치 중 하나에 둘 수 있습니다.
+
+- `%APPDATA%\DesktopCal Sync\.env`
+- `%APPDATA%\desktopcal-sync\.env`
+- 설치 실행 파일 옆 `.env`
 
 ## OpenClaw 응답 계약(권장)
 
@@ -161,5 +179,6 @@ npm run build
 
 ## 보안 참고
 
-- 클라이언트 앱 `.env`에는 비밀 API 키를 넣지 않는 것을 권장합니다.
+- 앱 설정에 저장한 AI API Key는 로컬 사용자 데이터 저장소에 저장됩니다.
+- 배포 바이너리에 `.env`를 포함하지 마세요.
 - 외부 API 비밀키는 백엔드 프록시/서버 환경변수에서 관리하세요.

@@ -1,7 +1,9 @@
 ﻿import { app, BrowserWindow, ipcMain } from "electron";
 import dayjs from "dayjs";
+import Store from "electron-store";
 import {
   IPC_CHANNELS,
+  aiConfigUpdateSchema,
   calendarColorSchema,
   calendarSelectionSchema,
   eventDeleteSchema,
@@ -33,6 +35,40 @@ const WINDOW_MIN_WIDTH = 856;
 const WINDOW_MIN_HEIGHT = 804;
 const WINDOW_MAX_WIDTH = 10000;
 const WINDOW_MAX_HEIGHT = 10000;
+const NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const NVIDIA_DEFAULT_MODEL = "openai/gpt-oss-120b";
+const OPENAI_DEFAULT_MODEL = "gpt-4o-mini";
+
+type AiProvider = "nvidia" | "openai" | "custom";
+
+type AiConfigPrivate = {
+  provider: AiProvider;
+  apiKey: string;
+  chatUrl: string;
+  model: string;
+};
+
+type AiConfigPublic = Omit<AiConfigPrivate, "apiKey"> & {
+  hasApiKey: boolean;
+};
+
+const defaultAiConfig: AiConfigPrivate = {
+  provider: "nvidia",
+  apiKey: "",
+  chatUrl: NVIDIA_CHAT_URL,
+  model: NVIDIA_DEFAULT_MODEL
+};
+
+const aiConfigStore = new Store<{ config: AiConfigPrivate }>({
+  name: "ai-config",
+  defaults: {
+    config: defaultAiConfig
+  }
+}) as unknown as {
+  get: (key: "config") => AiConfigPrivate | undefined;
+  set: (key: "config", value: AiConfigPrivate) => void;
+};
 
 function applyDesktopPinnedMode(mainWindow: BrowserWindow, pinned: boolean) {
   mainWindow.setResizable(!pinned);
@@ -101,9 +137,11 @@ function extractOpenClawText(payload: unknown): string | null {
     reply?: string;
     output_text?: string;
     content?: string;
+    error?: { message?: string };
     choices?: Array<{ message?: { content?: string }; text?: string }>;
     output?: Array<{ content?: Array<{ text?: string }> }>;
   };
+  if (typeof raw.error?.message === "string" && raw.error.message.trim().length > 0) return raw.error.message.trim();
   if (typeof raw.content === "string" && raw.content.trim().length > 0) return raw.content.trim();
   if (typeof raw.reply === "string" && raw.reply.trim().length > 0) return raw.reply.trim();
   if (typeof raw.output_text === "string" && raw.output_text.trim().length > 0) return raw.output_text.trim();
@@ -156,34 +194,153 @@ function buildOpenClawCandidateEndpoints(endpoint: string): string[] {
   return Array.from(candidates);
 }
 
-type OpenClawMessage = { role: "user" | "assistant"; content: string };
+type AiMessage = { role: "system" | "user" | "assistant"; content: string };
 
-function buildOpenClawHeaders() {
+function defaultsForAiProvider(provider: AiProvider) {
+  if (provider === "openai") {
+    return { chatUrl: OPENAI_CHAT_URL, model: OPENAI_DEFAULT_MODEL };
+  }
+  if (provider === "nvidia") {
+    return { chatUrl: NVIDIA_CHAT_URL, model: NVIDIA_DEFAULT_MODEL };
+  }
+  return { chatUrl: "", model: "" };
+}
+
+function normalizeAiConfig(config: Partial<AiConfigPrivate>): AiConfigPrivate {
+  const provider = config.provider ?? defaultAiConfig.provider;
+  const providerDefaults = defaultsForAiProvider(provider);
+  return {
+    provider,
+    apiKey: (config.apiKey ?? "").trim(),
+    chatUrl: (config.chatUrl ?? providerDefaults.chatUrl).trim(),
+    model: (config.model ?? providerDefaults.model).trim()
+  };
+}
+
+function getStoredAiConfig() {
+  return normalizeAiConfig(aiConfigStore.get("config") ?? defaultAiConfig);
+}
+
+function toPublicAiConfig(config: AiConfigPrivate): AiConfigPublic {
+  return {
+    provider: config.provider,
+    chatUrl: config.chatUrl,
+    model: config.model,
+    hasApiKey: config.apiKey.trim().length > 0
+  };
+}
+
+function updateStoredAiConfig(patch: Partial<AiConfigPrivate>) {
+  const current = getStoredAiConfig();
+  const provider = patch.provider ?? current.provider;
+  const providerChanged = patch.provider && patch.provider !== current.provider;
+  const providerDefaults = defaultsForAiProvider(provider);
+  const next = normalizeAiConfig({
+    provider,
+    apiKey: patch.apiKey !== undefined ? patch.apiKey : current.apiKey,
+    chatUrl: patch.chatUrl !== undefined ? patch.chatUrl : providerChanged ? providerDefaults.chatUrl : current.chatUrl,
+    model: patch.model !== undefined ? patch.model : providerChanged ? providerDefaults.model : current.model
+  });
+  aiConfigStore.set("config", next);
+  return next;
+}
+
+function getEnvOpenAiConfig(): AiConfigPrivate | null {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return null;
+  const chatUrl = process.env.OPENAI_CHAT_URL?.trim() || OPENAI_CHAT_URL;
+  const provider: AiProvider = chatUrl.includes("integrate.api.nvidia.com") ? "nvidia" : "openai";
+  return normalizeAiConfig({
+    provider,
+    apiKey,
+    chatUrl,
+    model: process.env.OPENAI_MODEL?.trim() || (provider === "nvidia" ? NVIDIA_DEFAULT_MODEL : OPENAI_DEFAULT_MODEL)
+  });
+}
+
+function buildAiHeaders(apiKey?: string) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
   };
-  const apiKey = process.env.OPENCLAW_API_KEY?.trim();
   if (apiKey) {
     headers.Authorization = `Bearer ${apiKey}`;
   }
   return headers;
 }
 
-async function requestOpenClaw(messages: OpenClawMessage[]) {
+async function requestOpenAiCompatible(messages: AiMessage[], config: AiConfigPrivate) {
+  if (!config.apiKey.trim()) {
+    return { ok: false as const, error: "AI API key is not set." };
+  }
+  if (!config.chatUrl.trim()) {
+    return { ok: false as const, error: "AI chat URL is not set." };
+  }
+  if (!config.model.trim()) {
+    return { ok: false as const, error: "AI model is not set." };
+  }
+
+  const body: Record<string, unknown> = {
+    model: config.model,
+    messages,
+    stream: false,
+    response_format: { type: "json_object" }
+  };
+  const send = (requestBody: Record<string, unknown>) =>
+    fetch(config.chatUrl, {
+      method: "POST",
+      headers: buildAiHeaders(config.apiKey),
+      body: JSON.stringify(requestBody)
+    });
+  const parseResponse = async (response: Response) => {
+    const rawText = await response.text();
+    let json: unknown = null;
+    try {
+      json = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      json = null;
+    }
+    return { response, rawText, json };
+  };
+  try {
+    let parsed = await parseResponse(await send(body));
+    if (!parsed.response.ok && (parsed.response.status === 400 || parsed.response.status === 422)) {
+      const fallbackBody = { ...body };
+      delete fallbackBody.response_format;
+      parsed = await parseResponse(await send(fallbackBody));
+    }
+    if (!parsed.response.ok) {
+      const detail = extractOpenClawText(parsed.json) ?? parsed.rawText;
+      return { ok: false as const, error: `AI response error (${parsed.response.status})${detail ? `: ${detail}` : ""}` };
+    }
+    const content = extractOpenClawText(parsed.json) ?? parsed.rawText.trim();
+    if (!content) {
+      return { ok: false as const, error: "Could not read AI response body." };
+    }
+    return { ok: true as const, content };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+async function requestOpenClaw(messages: AiMessage[]) {
   const endpoint = process.env.OPENCLAW_CHAT_URL?.trim();
   if (!endpoint) {
-    return { ok: false as const, error: "OPENCLAW_CHAT_URL environment variable is not set." };
+    return { ok: false as const, error: "OPENAI_API_KEY or OPENCLAW_CHAT_URL environment variable is not set." };
   }
 
   const model = process.env.OPENCLAW_MODEL?.trim();
+  const openClawMessages = messages.filter((message) => message.role !== "system") as Array<{ role: "user" | "assistant"; content: string }>;
   const body: Record<string, unknown> = {
-    messages,
+    messages: openClawMessages,
     stream: false
   };
   if (model) {
     body.model = model;
   }
-  const headers = buildOpenClawHeaders();
+  const headers = buildAiHeaders(process.env.OPENCLAW_API_KEY?.trim());
 
   const send = async (url: string, requestBody: Record<string, unknown>) =>
     fetch(url, {
@@ -250,6 +407,32 @@ async function requestOpenClaw(messages: OpenClawMessage[]) {
       error: error instanceof Error ? error.message : String(error)
     };
   }
+}
+
+async function requestAi(messages: AiMessage[]) {
+  const storedConfig = getStoredAiConfig();
+  if (storedConfig.apiKey.trim()) {
+    return requestOpenAiCompatible(messages, storedConfig);
+  }
+
+  const envOpenAiConfig = getEnvOpenAiConfig();
+  if (envOpenAiConfig) {
+    return requestOpenAiCompatible(messages, envOpenAiConfig);
+  }
+
+  return requestOpenClaw(messages);
+}
+
+async function testAiConfig() {
+  const prompt = [
+    "Return ONLY this JSON object:",
+    '{ "ok": true, "message": "connected" }'
+  ].join("\n");
+  const result = await requestOpenAiCompatible([{ role: "user", content: prompt }], getStoredAiConfig());
+  if (!result.ok) {
+    return result;
+  }
+  return { ok: true as const, content: result.content };
 }
 
 type ParsedAiEvent = {
@@ -474,6 +657,16 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     return settings;
   });
 
+  ipcMain.handle(IPC_CHANNELS.aiConfigGet, async () => toPublicAiConfig(getStoredAiConfig()));
+
+  ipcMain.handle(IPC_CHANNELS.aiConfigUpdate, async (_e, payload: unknown) => {
+    const patch = aiConfigUpdateSchema.parse(payload);
+    const next = updateStoredAiConfig(patch);
+    return toPublicAiConfig(next);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.aiConfigTest, async () => testAiConfig());
+
   ipcMain.handle(IPC_CHANNELS.calendarList, async () => calendarRepository.listAll());
   ipcMain.handle(IPC_CHANNELS.calendarSelect, async (_e, payload: unknown) => {
     const input = calendarSelectionSchema.parse(payload);
@@ -643,7 +836,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
   ipcMain.handle(IPC_CHANNELS.openClawChat, async (_event, payload: unknown) => {
     const input = openClawChatSchema.parse(payload);
     const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
-    return requestOpenClaw(messages);
+    return requestAi(messages);
   });
 
   ipcMain.handle(IPC_CHANNELS.openClawCreateEvent, async (_event, payload: unknown) => {
@@ -675,7 +868,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
       `- Available calendars: ${JSON.stringify(availableCalendars)}.`,
       `- Current time reference: ${now.toISOString()}.`
     ].join("\n");
-    const ai = await requestOpenClaw([{ role: "assistant", content: prompt }, ...messages]);
+    const ai = await requestAi([{ role: "system", content: prompt }, ...messages]);
     if (!ai.ok) {
       return ai;
     }
@@ -706,7 +899,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
 
     const startsAt = dayjs(parsed.startsAt);
     if (!startsAt.isValid()) {
-      return { ok: false, error: "Invalid start time returned by OpenClaw." };
+      return { ok: false, error: "Invalid start time returned by AI." };
     }
     const allDay = Boolean(parsed.allDay);
     let endsAt = parsed.endsAt ? dayjs(parsed.endsAt) : startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
@@ -786,7 +979,3 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     return deleteGoogleTask(input.taskListId, input.taskId);
   });
 }
-
-
-
-

@@ -85,6 +85,15 @@ export const openClawCreateEventSchema = z.object({
     .optional()
 });
 
+export const aiProviderSchema = z.enum(["nvidia", "openai", "custom"]);
+
+export const aiConfigUpdateSchema = z.object({
+  provider: aiProviderSchema.optional(),
+  apiKey: z.string().max(4000).optional(),
+  chatUrl: z.string().url().max(500).optional(),
+  model: z.string().min(1).max(200).optional()
+});
+
 export const tasksByDateSchema = z.object({
   dateIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 });
@@ -118,6 +127,8 @@ export type CalendarColorInput = z.infer<typeof calendarColorSchema>;
 export type WindowResizeInput = z.infer<typeof windowResizeSchema>;
 export type OpenClawChatInput = z.infer<typeof openClawChatSchema>;
 export type OpenClawCreateEventInput = z.infer<typeof openClawCreateEventSchema>;
+export type AiProviderInput = z.infer<typeof aiProviderSchema>;
+export type AiConfigUpdateInput = z.infer<typeof aiConfigUpdateSchema>;
 export type TasksByDateInput = z.infer<typeof tasksByDateSchema>;
 export type TaskCompleteInput = z.infer<typeof taskCompleteSchema>;
 export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
@@ -155,6 +166,9 @@ export const IPC_CHANNELS = {
   desktopPinned: "window:desktop-pinned",
   windowGetBounds: "window:get-bounds",
   windowResize: "window:resize",
+  aiConfigGet: "ai:config-get",
+  aiConfigUpdate: "ai:config-update",
+  aiConfigTest: "ai:config-test",
   openClawChat: "openclaw:chat",
   openClawCreateEvent: "openclaw:event-create",
   tasksByDate: "tasks:by-date",
