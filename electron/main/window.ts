@@ -19,6 +19,10 @@ const windowStore = new Store<{ mainWindow: WindowState }>({
   set: (key: "mainWindow", value: WindowState) => void;
 };
 
+function getWindowIconPath() {
+  return path.join(app.getAppPath(), "assets", process.platform === "darwin" ? "app.icns" : "app.ico");
+}
+
 export function createMainWindow() {
   const saved = windowStore.get("mainWindow");
   const display = screen.getPrimaryDisplay().workAreaSize;
@@ -29,7 +33,7 @@ export function createMainWindow() {
     height,
     x: saved.x,
     y: saved.y,
-    icon: path.join(app.getAppPath(), "assets", "app.ico"),
+    icon: getWindowIconPath(),
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",

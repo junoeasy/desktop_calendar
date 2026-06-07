@@ -1,6 +1,6 @@
 ﻿# DesktopCal Sync
 
-Windows 데스크톱 스타일 캘린더 앱입니다.  
+Windows/macOS 데스크톱 스타일 캘린더 앱입니다.  
 로컬(SQLite) 우선 구조로 일정을 관리하고 Google Calendar와 양방향 동기화합니다.
 
 ## 주요 기능
@@ -65,10 +65,21 @@ npm run start
 npm run dist
 ```
 
+플랫폼별로 따로 만들 수도 있습니다.
+
+```bash
+npm run dist:win
+npm run dist:mac
+npm run dist:mac:x64
+npm run dist:mac:arm64
+```
+
 생성 경로:
 
 - `release/DesktopCal Sync Setup <version>.exe`
 - `release/win-unpacked/`
+- `release/DesktopCal Sync-<version>.dmg`
+- `release/mac*/`
 
 ## 공개 앱 설정
 
