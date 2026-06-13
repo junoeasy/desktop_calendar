@@ -330,6 +330,7 @@ export const eventRepository = {
     return row ? mapEvent(row) : null;
   },
   upsertRemote(row: {
+    localId?: string;
     calendarId: string;
     providerEventId: string;
     title: string;
@@ -341,26 +342,23 @@ export const eventRepository = {
     etag: string | null;
     remoteUpdatedAt: string | null;
   }) {
-    const existing = getDb()
+    const db = getDb();
+    const existingByProvider = db
       .prepare("SELECT * FROM events WHERE provider_event_id = ?")
       .get(row.providerEventId) as DbEvent | undefined;
+    const existingByLocalId = row.localId
+      ? (db.prepare("SELECT * FROM events WHERE id = ?").get(row.localId) as DbEvent | undefined)
+      : undefined;
+    const existing = existingByProvider ?? existingByLocalId;
     const ts = nowIso();
-    const id = existing?.id ?? uuidv4();
-    getDb()
-      .prepare(
-        `INSERT INTO events (
-          id, calendar_id, provider_event_id, title, description, location,
-          starts_at, ends_at, all_day, etag, remote_updated_at, local_updated_at,
-          deleted_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
-        ON CONFLICT(provider_event_id) DO UPDATE SET
-          calendar_id=excluded.calendar_id, title=excluded.title, description=excluded.description,
-          location=excluded.location, starts_at=excluded.starts_at, ends_at=excluded.ends_at,
-          all_day=excluded.all_day, etag=excluded.etag, remote_updated_at=excluded.remote_updated_at,
-          deleted_at=NULL, updated_at=excluded.updated_at`
-      )
-      .run(
-        id,
+    if (existing) {
+      db.prepare(
+        `UPDATE events SET
+          calendar_id = ?, provider_event_id = ?, title = ?, description = ?, location = ?,
+          starts_at = ?, ends_at = ?, all_day = ?, etag = ?, remote_updated_at = ?,
+          deleted_at = NULL, updated_at = ?
+         WHERE id = ?`
+      ).run(
         row.calendarId,
         row.providerEventId,
         row.title,
@@ -372,7 +370,32 @@ export const eventRepository = {
         row.etag,
         row.remoteUpdatedAt,
         ts,
-        existing?.created_at ?? ts,
+        existing.id
+      );
+      return;
+    }
+
+    db.prepare(
+      `INSERT INTO events (
+          id, calendar_id, provider_event_id, title, description, location,
+          starts_at, ends_at, all_day, etag, remote_updated_at, local_updated_at,
+          deleted_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+    )
+      .run(
+        uuidv4(),
+        row.calendarId,
+        row.providerEventId,
+        row.title,
+        row.description,
+        row.location,
+        row.startsAt,
+        row.endsAt,
+        row.allDay,
+        row.etag,
+        row.remoteUpdatedAt,
+        ts,
+        ts,
         ts
       );
   },
