@@ -191,6 +191,7 @@ async function pushQueue() {
           requestBody: body
         });
         eventRepository.upsertRemote({
+          localId: event.id,
           calendarId: event.calendarId,
           providerEventId: created.data.id ?? "",
           title: created.data.summary ?? event.title,
