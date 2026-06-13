@@ -462,6 +462,7 @@ type ParsedAiCalendarAction = {
   action?: "create" | "delete" | "none";
   reply?: string;
   event?: ParsedAiEvent | null;
+  events?: ParsedAiEvent[] | null;
   delete?: ParsedAiDeleteEvent | null;
   title?: string;
   startsAt?: string;
@@ -737,6 +738,47 @@ function findAiDeleteDraft(parsed: ParsedAiDeleteEvent): { draft: AiDeleteEventD
   };
 }
 
+function buildAiEventDraft(parsed: ParsedAiEvent, input: OpenClawCreateEventInput): { ok: true; draft: AiEventDraft } | { ok: false; error: string } {
+  const startsAt = dayjs(parsed.startsAt);
+  if (!startsAt.isValid()) {
+    return { ok: false, error: "Invalid start time returned by AI." };
+  }
+  const allDay = Boolean(parsed.allDay);
+  let endsAt = parsed.endsAt ? dayjs(parsed.endsAt) : startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
+  if (!endsAt.isValid() || endsAt.isBefore(startsAt)) {
+    endsAt = startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
+  }
+
+  const resolvedCalendarId = resolveCalendarId(input.calendarId, parsed, input.message);
+  if (!resolvedCalendarId) {
+    return { ok: false, error: "Could not resolve target calendar." };
+  }
+  const calendarTitle = (calendarRepository.listAll() as CalendarRow[]).find((calendar) => calendar.id === resolvedCalendarId)?.title ?? null;
+  const payloadForCreate = {
+    calendarId: resolvedCalendarId,
+    title: String(parsed.title).trim().slice(0, 150),
+    description: typeof parsed.description === "string" ? parsed.description.slice(0, 2000) : null,
+    location: typeof parsed.location === "string" ? parsed.location.slice(0, 255) : null,
+    startsAt: allDay ? localDayBoundsToUtc(localDateFromIso(startsAt.toISOString())).start : startsAt.toISOString(),
+    endsAt: allDay ? localDayBoundsToUtc(localDateFromIso(endsAt.toISOString())).end : endsAt.toISOString(),
+    allDay
+  };
+  const validated = eventUpsertSchema.parse(payloadForCreate);
+  return {
+    ok: true,
+    draft: {
+      calendarId: validated.calendarId,
+      calendarTitle,
+      title: validated.title,
+      description: validated.description ?? null,
+      location: validated.location ?? null,
+      startsAt: validated.startsAt,
+      endsAt: validated.endsAt,
+      allDay: validated.allDay
+    }
+  };
+}
+
 async function parseAiEventDraft(input: OpenClawCreateEventInput) {
   const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
   const defaultCalendarId = pickDefaultCalendarId();
@@ -753,12 +795,14 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
   const prompt = [
     "You are a calendar command parser for a desktop calendar app.",
     "Return ONLY one JSON object with this exact shape:",
-    '{ "action": "create"|"delete"|"none", "reply": string, "event": { "title": string, "startsAt": string, "endsAt": string, "allDay": boolean, "description": string|null, "location": string|null, "calendarId": string|null, "calendarTitle": string|null }|null, "delete": { "title": string|null, "dateIso": string|null, "startsAt": string|null, "endsAt": string|null, "calendarId": string|null, "calendarTitle": string|null }|null }',
+    '{ "action": "create"|"delete"|"none", "reply": string, "event": { "title": string, "startsAt": string, "endsAt": string, "allDay": boolean, "description": string|null, "location": string|null, "calendarId": string|null, "calendarTitle": string|null }|null, "events": [{ "title": string, "startsAt": string, "endsAt": string, "allDay": boolean, "description": string|null, "location": string|null, "calendarId": string|null, "calendarTitle": string|null }], "delete": { "title": string|null, "dateIso": string|null, "startsAt": string|null, "endsAt": string|null, "calendarId": string|null, "calendarTitle": string|null }|null }',
     "Rules:",
     "- Use action=create only when the user asks to add/register/create an event.",
     "- Use action=delete only when the user asks to remove/delete/cancel an existing event.",
     "- Use action=none when the request is not a calendar create/delete command.",
     "- For create: event.startsAt/endsAt must be ISO8601 date-time strings.",
+    "- For create with multiple events: put every item in events and set event to null.",
+    "- For create with one event: use event or a one-item events array.",
     "- For create: if allDay is true, still return ISO8601 values.",
     "- For create: infer missing end time as 1 hour after start for timed events.",
     "- For delete: fill delete.title with the event title or topic to remove.",
@@ -778,17 +822,19 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
 
   const envelope = extractOpenClawEnvelope(ai.content);
   let parsed: ParsedAiEvent | null = null;
+  let parsedEvents: ParsedAiEvent[] = [];
   let parsedDelete: ParsedAiDeleteEvent | null = null;
   let reply = "";
   if (envelope) {
     reply = typeof envelope.reply === "string" ? envelope.reply : "";
-    const createSignal = (envelope.signals ?? []).find((signal) => signal?.kind === "create_event" && signal.payload);
+    const createSignals = (envelope.signals ?? []).filter((signal) => signal?.kind === "create_event" && signal.payload);
     const deleteSignal = (envelope.signals ?? []).find((signal) => signal?.kind === "delete_event" && signal.payload);
-    parsed = (createSignal?.payload as ParsedAiEvent | undefined) ?? null;
+    parsedEvents = createSignals.map((signal) => signal.payload as ParsedAiEvent);
+    parsed = parsedEvents[0] ?? null;
     parsedDelete = (deleteSignal?.payload as ParsedAiDeleteEvent | undefined) ?? null;
   }
 
-  if (!parsed) {
+  if (parsedEvents.length === 0) {
     const fallback = extractJsonBlock(ai.content);
     if (fallback) {
       const action = "action" in fallback ? fallback.action : undefined;
@@ -796,9 +842,14 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
       if (action === "delete" && "delete" in fallback) {
         parsedDelete = fallback.delete ?? null;
       } else if (action === "create" && "event" in fallback) {
-        parsed = fallback.event ?? null;
+        parsedEvents = [
+          ...(("events" in fallback && Array.isArray(fallback.events) ? fallback.events : []) ?? []),
+          ...(fallback.event ? [fallback.event] : [])
+        ];
+        parsed = parsedEvents[0] ?? null;
       } else if ("title" in fallback && "startsAt" in fallback && fallback.title && fallback.startsAt) {
         parsed = fallback as ParsedAiEvent;
+        parsedEvents = [parsed];
       }
     }
   }
@@ -812,6 +863,7 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
           ? "삭제할 일정이 여러 개로 보여요. 날짜, 시간, 제목을 조금 더 구체적으로 말해 주세요."
           : "삭제할 일정을 찾지 못했어요. 날짜나 일정 제목을 조금 더 자세히 말해 주세요.",
         draft: null,
+        drafts: [],
         deleteDraft: null
       };
     }
@@ -819,58 +871,33 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
       ok: true as const,
       content: reply || `${match.draft.title} 일정을 삭제할까요?`,
       draft: null,
+      drafts: [],
       deleteDraft: match.draft
     };
   }
 
-  if (!parsed) {
+  if (parsedEvents.length === 0) {
     return {
       ok: true as const,
       content: reply || ai.content,
       draft: null,
+      drafts: [],
       deleteDraft: null
     };
   }
 
-  const startsAt = dayjs(parsed.startsAt);
-  if (!startsAt.isValid()) {
-    return { ok: false as const, error: "Invalid start time returned by AI." };
+  const draftResults = parsedEvents.map((event) => buildAiEventDraft(event, input));
+  const failed = draftResults.find((result) => !result.ok);
+  if (failed && !failed.ok) {
+    return { ok: false as const, error: failed.error };
   }
-  const allDay = Boolean(parsed.allDay);
-  let endsAt = parsed.endsAt ? dayjs(parsed.endsAt) : startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
-  if (!endsAt.isValid() || endsAt.isBefore(startsAt)) {
-    endsAt = startsAt.add(allDay ? 1 : 1, allDay ? "day" : "hour");
-  }
-
-  const resolvedCalendarId = resolveCalendarId(input.calendarId, parsed, input.message);
-  if (!resolvedCalendarId) {
-    return { ok: false as const, error: "Could not resolve target calendar." };
-  }
-  const calendarTitle = (calendarRepository.listAll() as CalendarRow[]).find((calendar) => calendar.id === resolvedCalendarId)?.title ?? null;
-  const payloadForCreate = {
-    calendarId: resolvedCalendarId,
-    title: String(parsed.title).trim().slice(0, 150),
-    description: typeof parsed.description === "string" ? parsed.description.slice(0, 2000) : null,
-    location: typeof parsed.location === "string" ? parsed.location.slice(0, 255) : null,
-    startsAt: allDay ? localDayBoundsToUtc(localDateFromIso(startsAt.toISOString())).start : startsAt.toISOString(),
-    endsAt: allDay ? localDayBoundsToUtc(localDateFromIso(endsAt.toISOString())).end : endsAt.toISOString(),
-    allDay
-  };
-  const validated = eventUpsertSchema.parse(payloadForCreate);
-  const draft: AiEventDraft = {
-    calendarId: validated.calendarId,
-    calendarTitle,
-    title: validated.title,
-    description: validated.description ?? null,
-    location: validated.location ?? null,
-    startsAt: validated.startsAt,
-    endsAt: validated.endsAt,
-    allDay: validated.allDay
-  };
+  const drafts = draftResults.map((result) => (result as { ok: true; draft: AiEventDraft }).draft);
+  const draft = drafts[0] ?? null;
   return {
     ok: true as const,
-    content: reply || `${draft.title} 일정을 추가할까요?`,
+    content: reply || (drafts.length > 1 ? `${drafts.length}개 일정을 추가할까요?` : `${draft?.title ?? "일정"} 일정을 추가할까요?`),
     draft,
+    drafts,
     deleteDraft: null
   };
 }
@@ -1116,30 +1143,39 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
     if (!parsed.ok) {
       return parsed;
     }
-    if (!parsed.draft) {
+    const drafts = parsed.drafts?.length ? parsed.drafts : parsed.draft ? [parsed.draft] : [];
+    if (drafts.length === 0) {
       return {
         ok: true,
         content: parsed.content,
         created: null
       };
     }
-    const created = createLocalEvent({
-      calendarId: parsed.draft.calendarId,
-      title: parsed.draft.title,
-      description: parsed.draft.description,
-      location: parsed.draft.location,
-      startsAt: parsed.draft.startsAt,
-      endsAt: parsed.draft.endsAt,
-      allDay: parsed.draft.allDay
-    });
-    if (!created) {
-      return { ok: false, error: "Failed to create event in local database." };
+    const createdEvents = [];
+    for (const draft of drafts) {
+      const created = createLocalEvent({
+        calendarId: draft.calendarId,
+        title: draft.title,
+        description: draft.description,
+        location: draft.location,
+        startsAt: draft.startsAt,
+        endsAt: draft.endsAt,
+        allDay: draft.allDay
+      });
+      if (!created) {
+        return { ok: false, error: "Failed to create event in local database." };
+      }
+      createdEvents.push(created);
     }
 
+    const created = createdEvents[0];
     const when = created.allDay ? dayjs(created.startsAt).format("M/D 하루 종일") : dayjs(created.startsAt).format("M/D HH:mm");
-    const targetCalendarTitle = parsed.draft.calendarTitle ?? "기본 캘린더";
+    const targetCalendarTitle = drafts[0]?.calendarTitle ?? "기본 캘린더";
     const calendarSuffix = ` (캘린더: ${targetCalendarTitle})`;
-    const contentWithCalendar = `일정을 등록했어요: ${created.title} (${when})${calendarSuffix}`;
+    const contentWithCalendar =
+      createdEvents.length > 1
+        ? `${createdEvents.length}개 일정을 등록했어요.${calendarSuffix}`
+        : `일정을 등록했어요: ${created.title} (${when})${calendarSuffix}`;
     return {
       ok: true,
       content: contentWithCalendar,

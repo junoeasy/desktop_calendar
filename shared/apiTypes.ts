@@ -199,7 +199,7 @@ export type DesktopCalBridge = {
   openclaw: {
     chat: (payload: { message: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<{ ok: true; content: string } | { ok: false; error: string }>;
     parseEvent: (payload: { message: string; calendarId?: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<
-      | { ok: true; content: string; draft: AiEventDraft | null; deleteDraft?: AiDeleteEventDraft | null }
+      | { ok: true; content: string; draft: AiEventDraft | null; drafts?: AiEventDraft[]; deleteDraft?: AiDeleteEventDraft | null }
       | { ok: false; error: string }
     >;
     createEvent: (payload: { message: string; calendarId?: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<

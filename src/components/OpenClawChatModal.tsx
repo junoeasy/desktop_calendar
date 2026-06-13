@@ -57,7 +57,7 @@ function formatDraftWhen(draft: { startsAt: string; endsAt: string; allDay: bool
 export function OpenClawChatModal({ open, calendars, onCreateEvent, onDeleteEvent, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [pendingDraft, setPendingDraft] = useState<AiEventDraft | null>(null);
+  const [pendingDrafts, setPendingDrafts] = useState<AiEventDraft[]>([]);
   const [pendingDelete, setPendingDelete] = useState<AiDeleteEventDraft | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -68,7 +68,7 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onDeleteEven
   useEffect(() => {
     if (!open) return;
     setError("");
-    setPendingDraft(null);
+    setPendingDrafts([]);
     setPendingDelete(null);
   }, [open]);
 
@@ -91,18 +91,18 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onDeleteEven
     return () => window.clearTimeout(timerId);
   }, [open]);
 
-  const canSend = useMemo(() => input.trim().length > 0 && !loading && !pendingDraft && !pendingDelete, [input, loading, pendingDraft, pendingDelete]);
+  const canSend = useMemo(() => input.trim().length > 0 && !loading && pendingDrafts.length === 0 && !pendingDelete, [input, loading, pendingDrafts.length, pendingDelete]);
 
   if (!open) return null;
 
   const onSend = async () => {
     const text = input.trim();
-    if (!text || loading || pendingDraft || pendingDelete || inFlightRef.current) return;
+    if (!text || loading || pendingDrafts.length > 0 || pendingDelete || inFlightRef.current) return;
 
     inFlightRef.current = true;
     setInput("");
     setError("");
-    setPendingDraft(null);
+    setPendingDrafts([]);
     setPendingDelete(null);
     const nextMessages = [...messages, { role: "user" as const, content: text }];
     setMessages(nextMessages);
@@ -121,9 +121,16 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onDeleteEven
       if (result.deleteDraft) {
         setPendingDelete(result.deleteDraft);
         setMessages((prev) => [...prev, { role: "assistant", content: `${result.deleteDraft.title} 일정을 삭제할까요?` }]);
-      } else if (result.draft) {
-        setPendingDraft(result.draft);
-        setMessages((prev) => [...prev, { role: "assistant", content: `${result.draft.title} 일정을 추가할까요?` }]);
+      } else if ((result.drafts?.length ?? 0) > 0 || result.draft) {
+        const drafts = result.drafts?.length ? result.drafts : result.draft ? [result.draft] : [];
+        setPendingDrafts(drafts);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: drafts.length > 1 ? `${drafts.length}개 일정을 추가할까요?` : `${drafts[0]?.title ?? "일정"} 일정을 추가할까요?`
+          }
+        ]);
       } else {
         setMessages((prev) => [...prev, { role: "assistant", content: toDisplayReply(result.content) }]);
       }
@@ -136,21 +143,24 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onDeleteEven
   };
 
   const onConfirmDraft = async () => {
-    if (!pendingDraft || loading || inFlightRef.current) return;
+    if (pendingDrafts.length === 0 || loading || inFlightRef.current) return;
 
     inFlightRef.current = true;
     setLoading(true);
     setError("");
     try {
-      const created = await onCreateEvent(pendingDraft);
+      const created = [];
+      for (const draft of pendingDrafts) {
+        created.push(await onCreateEvent(draft));
+      }
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: `등록했어요: ${created.title}`
+          content: created.length > 1 ? `${created.length}개 일정을 등록했어요.` : `등록했어요: ${created[0]?.title ?? "일정"}`
         }
       ]);
-      setPendingDraft(null);
+      setPendingDrafts([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -162,7 +172,7 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onDeleteEven
   const onRejectDraft = () => {
     if (loading) return;
     setMessages((prev) => [...prev, { role: "assistant", content: "등록하지 않았어요." }]);
-    setPendingDraft(null);
+    setPendingDrafts([]);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   };
 
@@ -230,14 +240,18 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onDeleteEven
             </div>
           ))}
           {loading && <div className="mr-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">응답 생성 중...</div>}
-          {pendingDraft && (
+          {pendingDrafts.length > 0 && (
             <div className="mr-auto w-full max-w-[92%] rounded-lg border border-accent/30 bg-accent/5 px-3 py-3 text-sm text-slate-800">
-              <div className="mb-2 font-semibold">이 일정으로 추가할까요?</div>
-              <div className="space-y-1 text-xs">
-                <div><span className="font-medium text-slate-600">제목</span> {pendingDraft.title}</div>
-                <div><span className="font-medium text-slate-600">시간</span> {formatDraftWhen(pendingDraft)}</div>
-                <div><span className="font-medium text-slate-600">분류</span> {pendingDraft.calendarTitle ?? "기본 캘린더"}</div>
-                {pendingDraft.location && <div><span className="font-medium text-slate-600">장소</span> {pendingDraft.location}</div>}
+              <div className="mb-2 font-semibold">{pendingDrafts.length > 1 ? `${pendingDrafts.length}개 일정으로 추가할까요?` : "이 일정으로 추가할까요?"}</div>
+              <div className="space-y-2 text-xs">
+                {pendingDrafts.map((draft, index) => (
+                  <div key={`${draft.title}-${draft.startsAt}-${index}`} className={pendingDrafts.length > 1 ? "rounded border border-accent/20 bg-white/70 p-2" : ""}>
+                    <div><span className="font-medium text-slate-600">제목</span> {draft.title}</div>
+                    <div><span className="font-medium text-slate-600">시간</span> {formatDraftWhen(draft)}</div>
+                    <div><span className="font-medium text-slate-600">분류</span> {draft.calendarTitle ?? "기본 캘린더"}</div>
+                    {draft.location && <div><span className="font-medium text-slate-600">장소</span> {draft.location}</div>}
+                  </div>
+                ))}
               </div>
               <div className="mt-3 flex gap-2">
                 <button
