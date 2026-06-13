@@ -29,6 +29,7 @@ import { buildQueuePayload } from "./queueMapper";
 import { completeStudyTimer, deleteSavedStudyTimer, getStudyTimerStatus, listSavedStudyTimers, pauseStudyTimer, resumeSavedStudyTimer, resumeStudyTimer, saveStudyTimer, startStudyTimer, stopStudyTimer } from "./studyTimer";
 import type { CalendarRow } from "../../shared/apiTypes";
 import type { OpenClawCreateEventInput } from "../../shared/ipc";
+import type { EventEntity } from "../../shared/models";
 import { completeGoogleTask, createGoogleTask, deleteGoogleTask, listGoogleTasksByDate, listTodayGoogleTasks } from "./googleTasks";
 import { checkForUpdatesManually } from "./updater";
 
@@ -437,8 +438,33 @@ async function testAiConfig() {
 }
 
 type ParsedAiEvent = {
+  action?: "create" | "delete" | "none";
   title: string;
   startsAt: string;
+  endsAt?: string;
+  allDay?: boolean;
+  description?: string | null;
+  location?: string | null;
+  calendarId?: string;
+  calendarTitle?: string;
+};
+
+type ParsedAiDeleteEvent = {
+  title?: string | null;
+  dateIso?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  calendarId?: string | null;
+  calendarTitle?: string | null;
+};
+
+type ParsedAiCalendarAction = {
+  action?: "create" | "delete" | "none";
+  reply?: string;
+  event?: ParsedAiEvent | null;
+  delete?: ParsedAiDeleteEvent | null;
+  title?: string;
+  startsAt?: string;
   endsAt?: string;
   allDay?: boolean;
   description?: string | null;
@@ -458,25 +484,34 @@ type AiEventDraft = {
   allDay: boolean;
 };
 
-type OpenClawSignalEnvelope = {
-  reply?: string;
-  signals?: Array<{ kind?: string; payload?: ParsedAiEvent }>;
+type AiDeleteEventDraft = {
+  eventId: string;
+  calendarTitle: string | null;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
 };
 
-function extractJsonBlock(text: string): ParsedAiEvent | null {
+type OpenClawSignalEnvelope = {
+  reply?: string;
+  signals?: Array<{ kind?: string; payload?: ParsedAiEvent | ParsedAiDeleteEvent }>;
+};
+
+function extractJsonBlock(text: string): ParsedAiCalendarAction | ParsedAiEvent | null {
   const trimmed = text.trim();
   const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   const candidates = [fenceMatch?.[1], trimmed].filter((item): item is string => Boolean(item));
 
   for (const candidate of candidates) {
     try {
-      return JSON.parse(candidate) as ParsedAiEvent;
+      return JSON.parse(candidate) as ParsedAiCalendarAction | ParsedAiEvent;
     } catch {
       const start = candidate.indexOf("{");
       const end = candidate.lastIndexOf("}");
       if (start >= 0 && end > start) {
         try {
-          return JSON.parse(candidate.slice(start, end + 1)) as ParsedAiEvent;
+          return JSON.parse(candidate.slice(start, end + 1)) as ParsedAiCalendarAction | ParsedAiEvent;
         } catch {
           // Try next candidate.
         }
@@ -606,6 +641,102 @@ function createLocalEvent(input: {
   return created;
 }
 
+function deleteLocalEvent(eventId: string) {
+  const event = eventRepository.getById(eventId);
+  if (!event) {
+    return { ok: true };
+  }
+  eventRepository.markDeleted(event.id);
+  const cal = (calendarRepository.listAll() as CalendarRow[]).find((c) => c.id === event.calendarId);
+  if (cal) {
+    syncRepository.enqueue({
+      action: "delete",
+      entityType: "event",
+      entityId: event.id,
+      payloadJson: buildQueuePayload(event.id, cal.provider_calendar_id)
+    });
+    void runSync(false);
+  }
+  return { ok: true };
+}
+
+function normalizeSearchText(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function eventMatchesCalendar(event: EventEntity, calendarId: string | null | undefined, calendarTitle: string | null | undefined) {
+  if (calendarId && event.calendarId !== calendarId) {
+    return false;
+  }
+  if (!calendarTitle) {
+    return true;
+  }
+  const calendar = (calendarRepository.listAll() as CalendarRow[]).find((row) => row.id === event.calendarId);
+  if (!calendar) {
+    return true;
+  }
+  return normalizeSearchText(calendar.title).includes(normalizeSearchText(calendarTitle));
+}
+
+function scoreDeleteCandidate(event: EventEntity, parsed: ParsedAiDeleteEvent) {
+  const wantedTitle = normalizeSearchText(parsed.title);
+  const eventTitle = normalizeSearchText(event.title);
+  let score = 0;
+
+  if (wantedTitle) {
+    if (eventTitle === wantedTitle) score += 80;
+    else if (eventTitle.includes(wantedTitle) || wantedTitle.includes(eventTitle)) score += 55;
+    else return -1;
+  } else {
+    score += 10;
+  }
+
+  const wantedStart = parsed.startsAt ? new Date(parsed.startsAt) : null;
+  if (wantedStart && !Number.isNaN(wantedStart.getTime())) {
+    const eventStart = new Date(event.startsAt);
+    const minutes = Math.abs(eventStart.getTime() - wantedStart.getTime()) / 60000;
+    if (minutes <= 5) score += 50;
+    else if (minutes <= 60) score += 30;
+    else if (localDateFromIso(eventStart) === localDateFromIso(wantedStart)) score += 15;
+  }
+
+  return score;
+}
+
+function findAiDeleteDraft(parsed: ParsedAiDeleteEvent): { draft: AiDeleteEventDraft | null; ambiguous: boolean } {
+  const parsedStart = parsed.startsAt ? new Date(parsed.startsAt) : null;
+  const parsedStartDate = parsedStart && !Number.isNaN(parsedStart.getTime()) ? localDateFromIso(parsedStart) : null;
+  const parsedDate =
+    parsed.dateIso?.match(/^\d{4}-\d{2}-\d{2}$/)?.[0] ??
+    parsedStartDate;
+  const candidates = parsedDate ? eventRepository.listByDay(parsedDate) : eventRepository.listRelevantUpcoming(30);
+  const calendarMap = new Map((calendarRepository.listAll() as CalendarRow[]).map((calendar) => [calendar.id, calendar.title]));
+  const ranked = candidates
+    .filter((event) => eventMatchesCalendar(event, parsed.calendarId, parsed.calendarTitle))
+    .map((event) => ({ event, score: scoreDeleteCandidate(event, parsed) }))
+    .filter((item) => item.score >= 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (ranked.length === 0) {
+    return { draft: null, ambiguous: false };
+  }
+  const [first, second] = ranked;
+  if (second && first.score - second.score < 20) {
+    return { draft: null, ambiguous: true };
+  }
+  return {
+    ambiguous: false,
+    draft: {
+      eventId: first.event.id,
+      calendarTitle: calendarMap.get(first.event.calendarId) ?? null,
+      title: first.event.title,
+      startsAt: first.event.startsAt,
+      endsAt: first.event.endsAt,
+      allDay: Boolean(first.event.allDay)
+    }
+  };
+}
+
 async function parseAiEventDraft(input: OpenClawCreateEventInput) {
   const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
   const defaultCalendarId = pickDefaultCalendarId();
@@ -620,14 +751,20 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
 
   const now = new Date();
   const prompt = [
-    "You are an event parser for a desktop calendar app.",
+    "You are a calendar command parser for a desktop calendar app.",
     "Return ONLY one JSON object with this exact shape:",
-    '{ "title": string, "startsAt": string, "endsAt": string, "allDay": boolean, "description": string|null, "location": string|null, "calendarId": string|null, "calendarTitle": string|null }',
+    '{ "action": "create"|"delete"|"none", "reply": string, "event": { "title": string, "startsAt": string, "endsAt": string, "allDay": boolean, "description": string|null, "location": string|null, "calendarId": string|null, "calendarTitle": string|null }|null, "delete": { "title": string|null, "dateIso": string|null, "startsAt": string|null, "endsAt": string|null, "calendarId": string|null, "calendarTitle": string|null }|null }',
     "Rules:",
-    "- startsAt/endsAt must be ISO8601 date-time strings.",
-    "- If allDay is true, still return ISO8601 values.",
-    "- Infer missing end time as 1 hour after start for timed events.",
-    "- Keep title concise.",
+    "- Use action=create only when the user asks to add/register/create an event.",
+    "- Use action=delete only when the user asks to remove/delete/cancel an existing event.",
+    "- Use action=none when the request is not a calendar create/delete command.",
+    "- For create: event.startsAt/endsAt must be ISO8601 date-time strings.",
+    "- For create: if allDay is true, still return ISO8601 values.",
+    "- For create: infer missing end time as 1 hour after start for timed events.",
+    "- For delete: fill delete.title with the event title or topic to remove.",
+    "- For delete: fill delete.dateIso as YYYY-MM-DD when the user gives or implies a date.",
+    "- For delete: fill delete.startsAt when the user gives or implies a specific time.",
+    "- Keep titles concise.",
     "- Calendar routing policy: resume/interview/job topics -> 취업 calendar, exam/study topics -> 공부 calendar, appointment/general plan topics -> 일정 calendar.",
     "- Prefer the user-selected calendar context when available.",
     `- User-selected calendarId from app: ${input.calendarId ?? "(none)"}.`,
@@ -641,25 +778,57 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
 
   const envelope = extractOpenClawEnvelope(ai.content);
   let parsed: ParsedAiEvent | null = null;
+  let parsedDelete: ParsedAiDeleteEvent | null = null;
   let reply = "";
   if (envelope) {
     reply = typeof envelope.reply === "string" ? envelope.reply : "";
     const createSignal = (envelope.signals ?? []).find((signal) => signal?.kind === "create_event" && signal.payload);
-    parsed = createSignal?.payload ?? null;
+    const deleteSignal = (envelope.signals ?? []).find((signal) => signal?.kind === "delete_event" && signal.payload);
+    parsed = (createSignal?.payload as ParsedAiEvent | undefined) ?? null;
+    parsedDelete = (deleteSignal?.payload as ParsedAiDeleteEvent | undefined) ?? null;
   }
 
   if (!parsed) {
     const fallback = extractJsonBlock(ai.content);
-    if (fallback && fallback.title && fallback.startsAt) {
-      parsed = fallback;
+    if (fallback) {
+      const action = "action" in fallback ? fallback.action : undefined;
+      reply = ("reply" in fallback && typeof fallback.reply === "string" ? fallback.reply : reply) || "";
+      if (action === "delete" && "delete" in fallback) {
+        parsedDelete = fallback.delete ?? null;
+      } else if (action === "create" && "event" in fallback) {
+        parsed = fallback.event ?? null;
+      } else if ("title" in fallback && "startsAt" in fallback && fallback.title && fallback.startsAt) {
+        parsed = fallback as ParsedAiEvent;
+      }
     }
+  }
+
+  if (parsedDelete) {
+    const match = findAiDeleteDraft(parsedDelete);
+    if (!match.draft) {
+      return {
+        ok: true as const,
+        content: match.ambiguous
+          ? "삭제할 일정이 여러 개로 보여요. 날짜, 시간, 제목을 조금 더 구체적으로 말해 주세요."
+          : "삭제할 일정을 찾지 못했어요. 날짜나 일정 제목을 조금 더 자세히 말해 주세요.",
+        draft: null,
+        deleteDraft: null
+      };
+    }
+    return {
+      ok: true as const,
+      content: reply || `${match.draft.title} 일정을 삭제할까요?`,
+      draft: null,
+      deleteDraft: match.draft
+    };
   }
 
   if (!parsed) {
     return {
       ok: true as const,
       content: reply || ai.content,
-      draft: null
+      draft: null,
+      deleteDraft: null
     };
   }
 
@@ -701,7 +870,8 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
   return {
     ok: true as const,
     content: reply || `${draft.title} 일정을 추가할까요?`,
-    draft
+    draft,
+    deleteDraft: null
   };
 }
 
@@ -841,22 +1011,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
 
   ipcMain.handle(IPC_CHANNELS.eventDelete, async (_e, payload: unknown) => {
     const input = eventDeleteSchema.parse(payload);
-    const event = eventRepository.getById(input.eventId);
-    if (!event) {
-      return { ok: true };
-    }
-    eventRepository.markDeleted(event.id);
-    const cal = (calendarRepository.listAll() as CalendarRow[]).find((c) => c.id === event.calendarId);
-    if (cal) {
-      syncRepository.enqueue({
-        action: "delete",
-        entityType: "event",
-        entityId: event.id,
-        payloadJson: buildQueuePayload(event.id, cal.provider_calendar_id)
-      });
-      void runSync(false);
-    }
-    return { ok: true };
+    return deleteLocalEvent(input.eventId);
   });
 
   ipcMain.handle(IPC_CHANNELS.syncNow, async (_e, payload: unknown) => {

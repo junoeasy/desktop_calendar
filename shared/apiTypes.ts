@@ -129,6 +129,15 @@ export type AiEventDraft = {
   allDay: boolean;
 };
 
+export type AiDeleteEventDraft = {
+  eventId: string;
+  calendarTitle: string | null;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+};
+
 export type DesktopCalBridge = {
   app: {
     version: () => Promise<string>;
@@ -190,7 +199,7 @@ export type DesktopCalBridge = {
   openclaw: {
     chat: (payload: { message: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<{ ok: true; content: string } | { ok: false; error: string }>;
     parseEvent: (payload: { message: string; calendarId?: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<
-      | { ok: true; content: string; draft: AiEventDraft | null }
+      | { ok: true; content: string; draft: AiEventDraft | null; deleteDraft?: AiDeleteEventDraft | null }
       | { ok: false; error: string }
     >;
     createEvent: (payload: { message: string; calendarId?: string; history?: Array<{ role: "user" | "assistant"; content: string }> }) => Promise<

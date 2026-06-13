@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AiEventDraft, CalendarRow } from "@shared/apiTypes";
+import type { AiDeleteEventDraft, AiEventDraft, CalendarRow } from "@shared/apiTypes";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -10,6 +10,7 @@ type Props = {
   open: boolean;
   calendars: CalendarRow[];
   onCreateEvent: (payload: AiEventDraft) => Promise<{ title: string }>;
+  onDeleteEvent: (eventId: string) => Promise<unknown>;
   onClose: () => void;
 };
 
@@ -29,7 +30,7 @@ function toDisplayReply(text: string) {
   return text;
 }
 
-function formatDraftWhen(draft: AiEventDraft) {
+function formatDraftWhen(draft: { startsAt: string; endsAt: string; allDay: boolean }) {
   const start = new Date(draft.startsAt);
   const end = new Date(draft.endsAt);
   if (Number.isNaN(start.getTime())) {
@@ -53,10 +54,11 @@ function formatDraftWhen(draft: AiEventDraft) {
   return endText ? `${startText} - ${endText}` : startText;
 }
 
-export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: Props) {
+export function OpenClawChatModal({ open, calendars, onCreateEvent, onDeleteEvent, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [pendingDraft, setPendingDraft] = useState<AiEventDraft | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<AiDeleteEventDraft | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -67,6 +69,7 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: P
     if (!open) return;
     setError("");
     setPendingDraft(null);
+    setPendingDelete(null);
   }, [open]);
 
   useEffect(() => {
@@ -88,18 +91,19 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: P
     return () => window.clearTimeout(timerId);
   }, [open]);
 
-  const canSend = useMemo(() => input.trim().length > 0 && !loading && !pendingDraft, [input, loading, pendingDraft]);
+  const canSend = useMemo(() => input.trim().length > 0 && !loading && !pendingDraft && !pendingDelete, [input, loading, pendingDraft, pendingDelete]);
 
   if (!open) return null;
 
   const onSend = async () => {
     const text = input.trim();
-    if (!text || loading || pendingDraft || inFlightRef.current) return;
+    if (!text || loading || pendingDraft || pendingDelete || inFlightRef.current) return;
 
     inFlightRef.current = true;
     setInput("");
     setError("");
     setPendingDraft(null);
+    setPendingDelete(null);
     const nextMessages = [...messages, { role: "user" as const, content: text }];
     setMessages(nextMessages);
     setLoading(true);
@@ -114,7 +118,10 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: P
         return;
       }
 
-      if (result.draft) {
+      if (result.deleteDraft) {
+        setPendingDelete(result.deleteDraft);
+        setMessages((prev) => [...prev, { role: "assistant", content: `${result.deleteDraft.title} 일정을 삭제할까요?` }]);
+      } else if (result.draft) {
         setPendingDraft(result.draft);
         setMessages((prev) => [...prev, { role: "assistant", content: `${result.draft.title} 일정을 추가할까요?` }]);
       } else {
@@ -156,6 +163,37 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: P
     if (loading) return;
     setMessages((prev) => [...prev, { role: "assistant", content: "등록하지 않았어요." }]);
     setPendingDraft(null);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const onConfirmDelete = async () => {
+    if (!pendingDelete || loading || inFlightRef.current) return;
+
+    inFlightRef.current = true;
+    setLoading(true);
+    setError("");
+    try {
+      await onDeleteEvent(pendingDelete.eventId);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `삭제했어요: ${pendingDelete.title}`
+        }
+      ]);
+      setPendingDelete(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+      inFlightRef.current = false;
+    }
+  };
+
+  const onRejectDelete = () => {
+    if (loading) return;
+    setMessages((prev) => [...prev, { role: "assistant", content: "삭제하지 않았어요." }]);
+    setPendingDelete(null);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   };
 
@@ -215,6 +253,34 @@ export function OpenClawChatModal({ open, calendars, onCreateEvent, onClose }: P
                   type="button"
                   disabled={loading}
                   onClick={onRejectDraft}
+                >
+                  아니요
+                </button>
+              </div>
+            </div>
+          )}
+          {pendingDelete && (
+            <div className="mr-auto w-full max-w-[92%] rounded-lg border border-rose-300 bg-rose-50 px-3 py-3 text-sm text-slate-800">
+              <div className="mb-2 font-semibold text-rose-700">이 일정을 삭제할까요?</div>
+              <div className="space-y-1 text-xs">
+                <div><span className="font-medium text-slate-600">제목</span> {pendingDelete.title}</div>
+                <div><span className="font-medium text-slate-600">시간</span> {formatDraftWhen(pendingDelete)}</div>
+                <div><span className="font-medium text-slate-600">분류</span> {pendingDelete.calendarTitle ?? "기본 캘린더"}</div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  className="rounded bg-rose-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm disabled:opacity-60"
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void onConfirmDelete()}
+                >
+                  삭제
+                </button>
+                <button
+                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  type="button"
+                  disabled={loading}
+                  onClick={onRejectDelete}
                 >
                   아니요
                 </button>

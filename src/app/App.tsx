@@ -949,7 +949,13 @@ export function App() {
         }}
       />
 
-      <OpenClawChatModal open={openClawChatOpen} calendars={calendars} onCreateEvent={(payload) => createEvent.mutateAsync(payload)} onClose={() => setOpenClawChatOpen(false)} />
+      <OpenClawChatModal
+        open={openClawChatOpen}
+        calendars={calendars}
+        onCreateEvent={(payload) => createEvent.mutateAsync(payload)}
+        onDeleteEvent={(eventId) => deleteEvent.mutateAsync(eventId)}
+        onClose={() => setOpenClawChatOpen(false)}
+      />
 
       {settings && !settings.desktopPinned && (
         <div className="app-no-drag fixed bottom-2 right-2 z-[90] flex items-center gap-1">
