@@ -270,7 +270,11 @@ function buildAiHeaders(apiKey?: string) {
   return headers;
 }
 
-async function requestOpenAiCompatible(messages: AiMessage[], config: AiConfigPrivate) {
+type AiRequestOptions = {
+  jsonMode?: boolean;
+};
+
+async function requestOpenAiCompatible(messages: AiMessage[], config: AiConfigPrivate, options: AiRequestOptions = {}) {
   if (!config.apiKey.trim()) {
     return { ok: false as const, error: "AI API key is not set." };
   }
@@ -284,9 +288,11 @@ async function requestOpenAiCompatible(messages: AiMessage[], config: AiConfigPr
   const body: Record<string, unknown> = {
     model: config.model,
     messages,
-    stream: false,
-    response_format: { type: "json_object" }
+    stream: false
   };
+  if (options.jsonMode !== false) {
+    body.response_format = { type: "json_object" };
+  }
   const send = (requestBody: Record<string, unknown>) =>
     fetch(config.chatUrl, {
       method: "POST",
@@ -411,15 +417,15 @@ async function requestOpenClaw(messages: AiMessage[]) {
   }
 }
 
-async function requestAi(messages: AiMessage[]) {
+async function requestAi(messages: AiMessage[], options: AiRequestOptions = {}) {
   const storedConfig = getStoredAiConfig();
   if (storedConfig.apiKey.trim()) {
-    return requestOpenAiCompatible(messages, storedConfig);
+    return requestOpenAiCompatible(messages, storedConfig, options);
   }
 
   const envOpenAiConfig = getEnvOpenAiConfig();
   if (envOpenAiConfig) {
-    return requestOpenAiCompatible(messages, envOpenAiConfig);
+    return requestOpenAiCompatible(messages, envOpenAiConfig, options);
   }
 
   return requestOpenClaw(messages);
@@ -779,12 +785,29 @@ function buildAiEventDraft(parsed: ParsedAiEvent, input: OpenClawCreateEventInpu
   };
 }
 
+async function answerGeneralAiQuestion(input: OpenClawCreateEventInput) {
+  const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
+  const prompt = [
+    "You are a helpful assistant inside a desktop calendar app.",
+    "Answer ordinary questions naturally in Korean unless the user uses another language.",
+    "Keep answers concise and practical.",
+    "If the user asks for live data such as current weather, prices, or news, say that the app needs a connected live-data tool for exact results instead of guessing."
+  ].join("\n");
+  const ai = await requestAi([{ role: "system", content: prompt }, ...messages], { jsonMode: false });
+  if (!ai.ok) {
+    return ai;
+  }
+  return {
+    ok: true as const,
+    content: ai.content,
+    draft: null,
+    drafts: [],
+    deleteDraft: null
+  };
+}
+
 async function parseAiEventDraft(input: OpenClawCreateEventInput) {
   const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
-  const defaultCalendarId = pickDefaultCalendarId();
-  if (!defaultCalendarId) {
-    return { ok: false as const, error: "No calendar is available. Connect Google Calendar first." };
-  }
   const availableCalendars = (calendarRepository.listAll() as CalendarRow[]).map((calendar) => ({
     id: calendar.id,
     title: calendar.title,
@@ -877,13 +900,7 @@ async function parseAiEventDraft(input: OpenClawCreateEventInput) {
   }
 
   if (parsedEvents.length === 0) {
-    return {
-      ok: true as const,
-      content: reply || ai.content,
-      draft: null,
-      drafts: [],
-      deleteDraft: null
-    };
+    return answerGeneralAiQuestion(input);
   }
 
   const draftResults = parsedEvents.map((event) => buildAiEventDraft(event, input));
@@ -1129,7 +1146,7 @@ export function registerIpc(mainWindow: BrowserWindow, options: RegisterIpcOptio
   ipcMain.handle(IPC_CHANNELS.openClawChat, async (_event, payload: unknown) => {
     const input = openClawChatSchema.parse(payload);
     const messages = [...(input.history ?? []), { role: "user" as const, content: input.message }];
-    return requestAi(messages);
+    return requestAi(messages, { jsonMode: false });
   });
 
   ipcMain.handle(IPC_CHANNELS.openClawParseEvent, async (_event, payload: unknown) => {
